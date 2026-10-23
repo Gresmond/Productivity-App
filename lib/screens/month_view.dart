@@ -31,7 +31,9 @@ class _MonthViewState extends State<MonthView> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) => _build(context, c.maxHeight));
+
+  Widget _build(BuildContext context, double height) {
     final p = context.palette;
     final state = AppScope.of(context);
     final (year, month) = (widget.year, widget.month);
@@ -57,7 +59,7 @@ class _MonthViewState extends State<MonthView> {
         ),
       );
     } else {
-      body = _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth);
+      body = _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth, height: height);
     }
 
     return SingleChildScrollView(
@@ -126,12 +128,21 @@ class _MonthViewState extends State<MonthView> {
 /// then just drawn at a new place each frame (see [_ColumnsDelegate]), so
 /// even a 14 x 31 grid moves at the display's full frame rate.
 class _Grid extends StatefulWidget {
-  const _Grid({required this.year, required this.month, required this.habits, required this.nameWidth});
+  const _Grid({
+    required this.year,
+    required this.month,
+    required this.habits,
+    required this.nameWidth,
+    required this.height,
+  });
 
   final int year;
   final int month;
   final List<Habit> habits;
   final double nameWidth;
+
+  /// The page's height: squares grow until the grid would need scrolling.
+  final double height;
 
   @override
   State<_Grid> createState() => _GridState();
@@ -140,6 +151,11 @@ class _Grid extends StatefulWidget {
 class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
   static const _morph = Duration(milliseconds: 420);
   static const _minCol = 22.0;
+  static const _maxCell = 64.0;
+
+  /// The page's height not taken by the grid's rows: the card's padding and
+  /// header, the day headers and the legend.
+  static const _chrome = 290.0;
 
   /// How many day columns are showing, easing between whole numbers. Column
   /// d is (shown - d + 1) of a column wide, between none and all of one.
@@ -201,12 +217,13 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
     return LayoutBuilder(
       builder: (context, constraints) {
         double gridWidth(double days) => (nameWidth + days * _minCol).clamp(constraints.maxWidth, double.infinity);
-        double colFor(double days) => ((gridWidth(days) - nameWidth) / days).clamp(20.0, 40.0);
+        // Columns spread across the card. Squares are sized for a 31-day
+        // month and as tall as the page allows, so they keep one size from
+        // month to month and only their places animate.
+        double colFor(double days) => (gridWidth(days) - nameWidth) / days;
         final width = gridWidth(dayCount.toDouble());
-
-        // Squares take the new month's size straight away and ease to it
-        // themselves; only their places animate.
-        final cell = colFor(dayCount.toDouble()) - 6;
+        final byHeight = habits.isEmpty ? _maxCell : (widget.height - _chrome) / habits.length - 5;
+        final cell = [colFor(31) - 6, byHeight, _maxCell].reduce((a, b) => a < b ? a : b).clamp(_minCol - 6, _maxCell);
         final columns = [
           for (var d = 1; d <= 31; d++)
             if (_dayAt(d) case final day?) (number: d, day: day, leaving: d > dayCount),
@@ -390,7 +407,7 @@ class _ColumnsDelegate extends FlowDelegate {
   // again while its column moves.
   @override
   BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
-      BoxConstraints.loose(const Size.square(40));
+      BoxConstraints.loose(const Size.square(_GridState._maxCell));
 
   @override
   void paintChildren(FlowPaintingContext context) {
@@ -518,6 +535,14 @@ class _MonthHabitRow extends StatefulWidget {
 class _MonthHabitRowState extends State<_MonthHabitRow> {
   bool _hover = false;
 
+  /// Lit only while the pointer is over the squares that can be clicked,
+  /// not the empty part of the row past them.
+  void _setHover(double? x) {
+    final layout = widget.layout;
+    final hover = x != null && x < widget.clickableDays.clamp(0, layout.shown.value) * layout.col;
+    if (hover != _hover) setState(() => _hover = hover);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -545,8 +570,8 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
         // Only the squares light up on hover, not the ritual's name.
         Expanded(
           child: MouseRegion(
-            onEnter: (_) => setState(() => _hover = true),
-            onExit: (_) => setState(() => _hover = false),
+            onHover: (e) => _setHover(e.localPosition.dx),
+            onExit: (_) => _setHover(null),
             child: Stack(
               children: [
                 Positioned.fill(
@@ -833,8 +858,22 @@ class _DayHeader extends StatelessWidget {
             ),
             child: Column(
               children: [
-                FadeThrough(
+                // The new letter rolls up into place as the old one rolls
+                // out above it, rather than every letter blinking out at once.
+                // Clipped to one line, so the two never show stacked.
+                AnimatedSwitcher(
                   duration: _morph,
+                  switchInCurve: Curves.easeInOutCubic,
+                  switchOutCurve: Curves.easeInOutCubic,
+                  layoutBuilder: (current, previous) =>
+                      ClipRect(child: Stack(alignment: Alignment.center, children: [...previous, ?current])),
+                  transitionBuilder: (child, anim) => SlideTransition(
+                    position: Tween(
+                      begin: Offset(0, child.key == ValueKey(letter) ? 1 : -1),
+                      end: Offset.zero,
+                    ).animate(anim),
+                    child: FadeTransition(opacity: anim, child: child),
+                  ),
                   child: AnimatedDefaultTextStyle(
                     key: ValueKey(letter),
                     duration: _morph,

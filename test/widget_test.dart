@@ -660,7 +660,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Theme'));
     await tester.pumpAndSettle();
-    expect(find.text('Sage & Sunset'), findsOneWidget);
+    expect(find.text('Citrus'), findsOneWidget);
     await _shoot(tester, 'theme_menu');
     await tester.tap(find.text('Soft Pastel'));
     await tester.pumpAndSettle();

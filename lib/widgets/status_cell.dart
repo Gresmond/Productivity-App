@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
-import 'fade_through.dart';
 
 /// A single habit-day square. Click to cycle its status; right-click to
 /// clear it.
@@ -25,32 +24,49 @@ class StatusCell extends StatefulWidget {
   State<StatusCell> createState() => _StatusCellState();
 }
 
-class _StatusCellState extends State<StatusCell> {
-  static const _base = 34.0;
-
+class _StatusCellState extends State<StatusCell> with TickerProviderStateMixin {
   bool _hover = false;
   bool _pressed = false;
+
+  /// A click changes a square quickly; a new month eases it in step with
+  /// the grid's morph, so a whole month of colours doesn't snap in at once.
+  static const _click = (Duration(milliseconds: 220), Curves.easeOutCubic);
+  static const _morph = (Duration(milliseconds: 420), Curves.easeInOutCubic);
+  var _change = _click;
+
+  /// The mark being left and the one being moved to; [_progress] runs
+  /// between them. Only the square's paint follows it, so a month of
+  /// squares changing at once never rebuilds a widget per frame.
+  _Look? _from;
+  _Look? _to;
+  late final _progress = AnimationController(vsync: this, value: 1);
+  late final _curved = CurvedAnimation(parent: _progress, curve: _change.$2);
+  late final _hoverAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 140));
+
+  @override
+  void didUpdateWidget(StatusCell old) {
+    super.didUpdateWidget(old);
+    _change = old.day == widget.day ? _click : _morph;
+  }
+
+  @override
+  void dispose() {
+    _curved.dispose();
+    _progress.dispose();
+    _hoverAnim.dispose();
+    super.dispose();
+  }
 
   // Keeps the square's animations alive when a note's tooltip comes or goes.
   final _squareKey = GlobalKey();
 
-  Widget _buildIcon(IconData? icon, double s, Palette p) {
-    // The old mark leaves before the new one arrives, so a tick and a cross
-    // never overlap mid-change.
-    return FadeThrough(
-      duration: const Duration(milliseconds: 220),
-      scaleFrom: 0.6,
-      child: icon == null
-          ? (_hover && widget.enabled
-              ? Icon(
-                  Icons.add_rounded,
-                  key: const ValueKey('hover_add'),
-                  size: s * 0.45,
-                  color: p.inkMuted.withValues(alpha: 0.4),
-                )
-              : const SizedBox.shrink())
-          : Icon(icon, key: ValueKey(icon), size: s * 0.54, color: p.onAccent),
-    );
+  void _setHover(bool hover) {
+    _hover = hover;
+    if (hover) {
+      _hoverAnim.forward();
+    } else {
+      _hoverAnim.reverse();
+    }
   }
 
   @override
@@ -59,56 +75,27 @@ class _StatusCellState extends State<StatusCell> {
     final state = AppScope.of(context);
     final status = state.statusOf(widget.day, widget.habit);
     final note = state.noteOf(widget.day, widget.habit);
-    // Drawn at one size and scaled to [widget.size], so a square that
-    // changes size (the month grid's columns differ by month) doesn't
-    // restart its colour animation, or redo it for every square at once.
-    const s = _base;
     final enabled = widget.enabled;
 
-    final (Color? base, IconData? icon) = switch (status) {
-      HabitStatus.none => (null, null),
-      HabitStatus.done => (p.done, Icons.check_rounded),
-      HabitStatus.missed => (p.missed, Icons.close_rounded),
-      HabitStatus.other => (p.other, Icons.remove_rounded),
+    final look = switch (status) {
+      HabitStatus.none => const _Look(null, null),
+      HabitStatus.done => _Look(p.done, Icons.check_rounded),
+      HabitStatus.missed => _Look(p.missed, Icons.close_rounded),
+      HabitStatus.other => _Look(p.other, Icons.remove_rounded),
     };
-
-    final borderRadius = BorderRadius.circular(s * 0.28);
-
-    final decoration = BoxDecoration(
-      borderRadius: borderRadius,
-      color: base == null
-          ? (_hover && enabled
-              ? p.empty.withValues(alpha: 0.9)
-              : p.empty.withValues(alpha: 0.55))
-          : null,
-      gradient: base == null
-          ? null
-          : LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color.lerp(base, Colors.white, 0.16)!, base],
-            ),
-      border: base == null
-          ? Border.all(
-              color: _hover && enabled
-                  ? p.accent.withValues(alpha: 0.35)
-                  : p.tileBorder.withValues(alpha: 0.7),
-              width: 1.0,
-            )
-          : Border.all(
-              color: Colors.white.withValues(alpha: 0.18),
-              width: 1.0,
-            ),
-      boxShadow: base == null
-          ? null
-          : [
-              BoxShadow(
-                color: base.withValues(alpha: _hover ? 0.40 : 0.24),
-                blurRadius: s * 0.35,
-                offset: Offset(0, s * 0.1),
-              ),
-            ],
-    );
+    if (_to == null) {
+      _from = _to = look;
+    } else if (look != _to) {
+      // A theme change recolours at once; a new mark eases in.
+      final themeOnly = look.icon == _to!.icon;
+      _from = themeOnly ? look : _to;
+      _to = look;
+      if (!themeOnly) {
+        _progress.duration = _change.$1;
+        _curved.curve = _change.$2;
+        _progress.forward(from: 0);
+      }
+    }
 
     Widget cell = RepaintBoundary(
       key: _squareKey,
@@ -116,17 +103,14 @@ class _StatusCellState extends State<StatusCell> {
         scale: _pressed ? 0.91 : (_hover && enabled ? 1.04 : 1.0),
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        child: SizedBox.square(
-          dimension: widget.size,
-          child: FittedBox(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              width: s,
-              height: s,
-              decoration: decoration,
-              child: _buildIcon(icon, s, p),
-            ),
+        child: CustomPaint(
+          size: Size.square(widget.size),
+          painter: _SquarePainter(
+            from: _from!,
+            to: _to!,
+            progress: _curved,
+            hover: enabled ? _hoverAnim : kAlwaysDismissedAnimation,
+            palette: p,
           ),
         ),
       ),
@@ -140,9 +124,12 @@ class _StatusCellState extends State<StatusCell> {
     // future day (when the month changes) fades instead of jumping.
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
-      onEnter: (_) => setState(() => _hover = true),
+      onEnter: (_) => setState(() {
+        _setHover(true);
+        _change = _click;
+      }),
       onExit: (_) => setState(() {
-        _hover = false;
+        _setHover(false);
         _pressed = false;
       }),
       child: GestureDetector(
@@ -160,6 +147,139 @@ class _StatusCellState extends State<StatusCell> {
       ),
     );
   }
+}
+
+/// What a square shows for one status: its colour (none when blank) and mark.
+class _Look {
+  const _Look(this.base, this.icon);
+
+  final Color? base;
+  final IconData? icon;
+
+  @override
+  bool operator ==(Object other) => other is _Look && other.base == base && other.icon == icon;
+
+  @override
+  int get hashCode => Object.hash(base, icon);
+}
+
+/// Paints a square partway from one [_Look] to another. Colours blend
+/// straight across; the old mark shrinks away before the new one grows in,
+/// so a tick and a cross never overlap.
+class _SquarePainter extends CustomPainter {
+  _SquarePainter({
+    required this.from,
+    required this.to,
+    required this.progress,
+    required this.hover,
+    required this.palette,
+  }) : super(repaint: Listenable.merge([progress, hover]));
+
+  final _Look from;
+  final _Look to;
+  final Animation<double> progress;
+  final Animation<double> hover;
+  final Palette palette;
+
+  /// Drawn at this size and scaled, so every square shares its glyphs.
+  static const _s = 34.0;
+
+  /// Laid-out marks by glyph, size and colour (alpha in 32 steps).
+  static final _glyphs = <(int, double, int), TextPainter>{};
+
+  static TextPainter _glyph(IconData icon, double size, Color color) {
+    final quantised = color.withValues(alpha: (color.a * 32).round() / 32);
+    return _glyphs.putIfAbsent((icon.codePoint, size, quantised.toARGB32()), () {
+      return TextPainter(
+        textDirection: TextDirection.ltr,
+        text: TextSpan(
+          text: String.fromCharCode(icon.codePoint),
+          style: TextStyle(
+            fontFamily: icon.fontFamily,
+            package: icon.fontPackage,
+            fontSize: size,
+            height: 1,
+            color: quantised,
+          ),
+        ),
+      )..layout();
+    });
+  }
+
+  List<Color> _fill(_Look l, Color empty) =>
+      l.base == null ? [empty, empty] : [Color.lerp(l.base, Colors.white, 0.16)!, l.base!];
+
+  Color _border(_Look l, double h) => l.base == null
+      ? Color.lerp(palette.tileBorder.withValues(alpha: 0.7), palette.accent.withValues(alpha: 0.35), h)!
+      : Colors.white.withValues(alpha: 0.18);
+
+  void _mark(Canvas canvas, IconData icon, double size, Color color, double amount) {
+    if (amount <= 0) return;
+    final scale = 0.6 + 0.4 * amount;
+    final g = _glyph(icon, size, color.withValues(alpha: color.a * amount));
+    canvas.save();
+    canvas.translate(_s / 2, _s / 2);
+    canvas.scale(scale);
+    g.paint(canvas, Offset(-g.width / 2, -g.height / 2));
+    canvas.restore();
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = progress.value;
+    final h = hover.value;
+    canvas.scale(size.width / _s);
+    const rect = Rect.fromLTWH(0, 0, _s, _s);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(_s * 0.28));
+    final empty = palette.empty.withValues(alpha: 0.55 + 0.35 * h);
+
+    // Shadow: only filled squares cast one, fading with their colour.
+    final shadowFrom = from.base == null ? 0.0 : 1 - t;
+    final shadowTo = to.base == null ? 0.0 : t;
+    final shadowColor = Color.lerp(from.base ?? to.base, to.base ?? from.base, t);
+    final shadowAmount = shadowFrom + shadowTo;
+    if (shadowColor != null && shadowAmount > 0) {
+      final shadow = BoxShadow(
+        color: shadowColor.withValues(alpha: (0.24 + 0.16 * h) * shadowAmount),
+        blurRadius: _s * 0.35,
+        offset: const Offset(0, _s * 0.1),
+      );
+      canvas.drawRRect(rrect.shift(shadow.offset), shadow.toPaint());
+    }
+
+    final a = _fill(from, empty), b = _fill(to, empty);
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color.lerp(a[0], b[0], t)!, Color.lerp(a[1], b[1], t)!],
+        ).createShader(rect),
+    );
+    canvas.drawRRect(
+      rrect.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Color.lerp(_border(from, h), _border(to, h), t)!,
+    );
+
+    // The old mark eases out over the first ~55%, the new one in over the last.
+    final out = 1 - Curves.easeInOutSine.transform((t / 0.55).clamp(0.0, 1.0));
+    final into = Curves.easeInOutSine.transform(((t - 0.45) / 0.55).clamp(0.0, 1.0));
+    if (from.icon case final icon? when icon != to.icon) _mark(canvas, icon, _s * 0.54, palette.onAccent, out);
+    if (to.icon case final icon?) {
+      _mark(canvas, icon, _s * 0.54, palette.onAccent, from.icon == icon ? 1 : into);
+    }
+    // A faint plus on a blank square under the pointer.
+    final blank = (from.base == null ? 1 - t : 0) + (to.base == null ? t : 0);
+    _mark(canvas, Icons.add_rounded, _s * 0.45, palette.inkMuted.withValues(alpha: 0.4), h * blank);
+  }
+
+  @override
+  bool shouldRepaint(_SquarePainter old) =>
+      old.from != from || old.to != to || old.palette != palette || old.progress != progress || old.hover != hover;
 }
 
 Future<void> cycleStatus(

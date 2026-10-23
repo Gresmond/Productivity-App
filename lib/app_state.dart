@@ -35,8 +35,14 @@ class AppState extends ChangeNotifier {
   int? viewMonth;
 
   /// Name of the chosen colour theme; null until one is picked.
-  late String? themeName = store.setting('theme');
+  late String? themeName = _savedTheme();
   late final ValueNotifier<String?> themeNotifier = ValueNotifier(themeName);
+
+  // Sage & Sunset was renamed Citrus.
+  String? _savedTheme() => switch (store.setting('theme')) {
+        'Sage & Sunset' => 'Citrus',
+        final name => name,
+      };
 
   void setTheme(String name) {
     themeName = name;
@@ -84,7 +90,7 @@ class AppState extends ChangeNotifier {
       _status[key] = e.status;
       if (e.note != null) _notes[key] = e.note!;
     }
-    themeName = store.setting('theme');
+    themeName = _savedTheme();
     themeNotifier.value = themeName;
     _startDay();
   }

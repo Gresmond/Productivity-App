@@ -149,9 +149,9 @@ const pastelPalette = Palette(
   shadow: Color(0xFF6F5C9E),
 );
 
-/// Earthy Nordic sage with sunset amber and terracotta.
-const sagePalette = Palette(
-  name: 'Sage & Sunset',
+/// Earthy Nordic sage with citrus amber and terracotta.
+const citrusPalette = Palette(
+  name: 'Citrus',
   brightness: Brightness.light,
   background: Color(0xFFEFF2EB),
   tile: Color(0xFFFBFCFA),
@@ -206,7 +206,7 @@ const eclipsePalette = Palette(
   shadow: Color(0xFF000000),
 );
 
-const palettes = [mainPalette, darkPalette, pastelPalette, sagePalette, sunsetPalette, eclipsePalette];
+const palettes = [mainPalette, darkPalette, pastelPalette, citrusPalette, sunsetPalette, eclipsePalette];
 
 Palette paletteNamed(String? name) =>
     palettes.firstWhere((p) => p.name == name, orElse: () => mainPalette);
