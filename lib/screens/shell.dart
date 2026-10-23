@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../data/backups.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/backups_dialog.dart';
 import '../widgets/fade_through.dart';
 import 'month_view.dart';
 import 'today_view.dart';
@@ -142,6 +144,8 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 14),
           _YearSwitcher(year: state.viewYear),
           const SizedBox(width: 10),
+          const _BackupsButton(),
+          const SizedBox(width: 10),
           const _ThemeButton(),
         ],
       ),
@@ -277,6 +281,65 @@ class _YearSwitcher extends StatelessWidget {
             icon: const Icon(Icons.chevron_right_rounded),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Opens the backups list; confirms a restore once it's done.
+class _BackupsButton extends StatelessWidget {
+  const _BackupsButton();
+
+  Future<void> _open(BuildContext context) async {
+    final p = context.palette;
+    final restored = await showDialog<Backup>(context: context, builder: (_) => const BackupsDialog());
+    if (restored == null || !context.mounted) return;
+    final from = restored.isBeforeRestore
+        ? 'how things were before your last restore'
+        : '${restored.day!.day} ${monthNames[restored.day!.month - 1]}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        width: 520,
+        backgroundColor: p.ink,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Text(
+          'Restored $from. What you had before is saved as a backup too.',
+          style: TextStyle(fontFamily: Fonts.ui, fontSize: 13.5, color: p.tile),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Tooltip(
+      message: 'Backups',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => _open(context),
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: p.tile.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+              border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
+              boxShadow: [
+                BoxShadow(
+                  color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(Icons.history_rounded, size: 21, color: p.inkMuted),
+          ),
+        ),
       ),
     );
   }

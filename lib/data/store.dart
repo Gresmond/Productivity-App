@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:sqlite3/sqlite3.dart';
 
 import '../models.dart';
@@ -18,6 +20,28 @@ class Store {
   final Database _db;
 
   void close() => _db.close();
+
+  /// Writes a consistent, compacted copy of the whole database to [path].
+  /// Written beside it first and renamed, so a crash never leaves half a file.
+  void saveCopy(String path) {
+    final part = File('$path.part');
+    if (part.existsSync()) part.deleteSync();
+    _db.execute('VACUUM INTO ?', [part.path]);
+    part.renameSync(path);
+  }
+
+  /// Replaces everything in this database with the copy at [path].
+  Future<void> restoreFrom(String path) async {
+    final source = sqlite3.open(path, mode: OpenMode.readOnly);
+    try {
+      final check = source.select('PRAGMA quick_check').first.columnAt(0);
+      if (check != 'ok') throw StateError('Backup is damaged: $check');
+      await source.backup(_db, nPage: -1).drain<void>();
+    } finally {
+      source.close();
+    }
+    _migrate(); // the copy may be from an older version of the app
+  }
 
   void _migrate() {
     final version = _db.select('PRAGMA user_version').first.columnAt(0) as int;

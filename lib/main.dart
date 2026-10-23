@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_state.dart';
+import 'data/backups.dart';
 import 'data/store.dart';
 import 'screens/shell.dart';
 import 'theme/app_theme.dart';
@@ -14,7 +16,11 @@ Future<void> main() async {
   // ~/.local/share/dev.nicholas.productivity_app/productivity.db
   final dir = await getApplicationSupportDirectory();
   await dir.create(recursive: true);
-  final state = AppState(Store.open(p.join(dir.path, 'productivity.db')));
+  final state = AppState(
+    Store.open(p.join(dir.path, 'productivity.db')),
+    // ~/.local/share/dev.nicholas.productivity_app/backups/
+    backups: Backups(Directory(p.join(dir.path, 'backups'))),
+  );
 
   // Picks up midnight (and waking from sleep) to roll the day over.
   Timer.periodic(const Duration(minutes: 1), (_) => state.checkDate());

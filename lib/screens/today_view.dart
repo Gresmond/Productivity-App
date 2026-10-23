@@ -40,7 +40,11 @@ class TodayView extends StatelessWidget {
                   const SizedBox(height: _gap),
                   const Expanded(child: TodoPanel(scope: TodoScope.month)),
                   const SizedBox(height: _gap),
-                  Expanded(child: _JournalCard(key: ValueKey(dateKey(AppScope.of(context).today)))),
+                  Expanded(
+                    child: _JournalCard(
+                      key: ValueKey((dateKey(AppScope.of(context).today), AppScope.of(context).restores)),
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:productivity_app/app_state.dart';
+import 'package:productivity_app/data/backups.dart';
 import 'package:productivity_app/data/store.dart';
 import 'package:productivity_app/main.dart';
 import 'package:productivity_app/models.dart';
@@ -189,6 +190,126 @@ void main() {
       state.addHabit(2026, 10, 'Stretch');
       expect(state.habits.map((h) => h.name), ['Stretch']);
     });
+  });
+
+  group('backups', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('productivity_backups'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('one copy a day, the newest 30 kept', () {
+      final backups = Backups(Directory('${dir.path}/backups'));
+      var now = DateTime(2026, 10, 23);
+      final state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => now);
+      expect(backups.list().map((b) => b.day), [DateTime(2026, 10, 23)]);
+
+      state.checkDate(); // same day: nothing new
+      expect(backups.list(), hasLength(1));
+
+      for (var i = 1; i <= 40; i++) {
+        now = DateTime(2026, 10, 23 + i); // crosses into November and over the clock change
+        state.checkDate();
+      }
+      final days = backups.list().map((b) => b.day!).toList();
+      expect(days, hasLength(30));
+      expect(days.first, DateTime(2026, 12, 2));
+      expect(days.last, DateTime(2026, 11, 3));
+      state.store.close();
+    });
+
+    test('restore brings back old data and can itself be undone', () async {
+      final backups = Backups(Directory('${dir.path}/backups'));
+      var now = DateTime(2026, 10, 23);
+      final state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => now);
+      final weights = state.habits.firstWhere((h) => h.name == 'Weights');
+      state.cycle(now, weights); // done, after the 23rd's copy was taken
+      state.setTheme('Sunset');
+
+      now = DateTime(2026, 10, 24);
+      state.checkDate(); // the 24th's copy has Weights done
+      state.cycle(DateTime(2026, 10, 23), weights); // now "not done"
+      state.addTodo(TodoScope.today, 'After the backup');
+
+      final oct24 = backups.list().firstWhere((b) => b.day == DateTime(2026, 10, 24));
+      await state.restore(oct24);
+      expect(state.statusOf(DateTime(2026, 10, 23), weights), HabitStatus.done);
+      expect(state.todos[TodoScope.today]!.map((t) => t.text), isNot(contains('After the backup')));
+      expect(state.themeName, 'Sunset');
+
+      final before = backups.list().first;
+      expect(before.isBeforeRestore, isTrue);
+      await state.restore(before); // undo
+      expect(state.statusOf(DateTime(2026, 10, 23), weights), HabitStatus.missed);
+      expect(state.todos[TodoScope.today]!.map((t) => t.text), contains('After the backup'));
+
+      // Undoing again swaps back: the before-restore copy is never lost.
+      await state.restore(backups.list().first);
+      expect(state.statusOf(DateTime(2026, 10, 23), weights), HabitStatus.done);
+      state.store.close();
+    });
+
+    test('a damaged copy is refused and changes nothing', () async {
+      final backups = Backups(Directory('${dir.path}/backups'));
+      final day = DateTime(2026, 10, 23);
+      final state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => day);
+      final copy = backups.list().single;
+      copy.file.writeAsStringSync('not a database');
+      final weights = state.habits.firstWhere((h) => h.name == 'Weights');
+      state.cycle(day, weights);
+
+      await expectLater(state.restore(copy), throwsA(anything));
+      expect(state.statusOf(day, weights), HabitStatus.done);
+      expect(state.store.monthHabits(2026, 10), hasLength(14));
+      state.store.close();
+    });
+  });
+
+  testWidgets('backups dialog restores after asking', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final dir = Directory.systemTemp.createTempSync('productivity_backups');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final backups = Backups(Directory('${dir.path}/backups'));
+    var now = DateTime(2026, 10, 20);
+    late AppState state;
+    await tester.runAsync(() async {
+      state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => now);
+      for (var d = 21; d <= 23; d++) {
+        now = DateTime(2026, 10, d);
+        state.checkDate();
+      }
+    });
+    final weights = state.habits.firstWhere((h) => h.name == 'Weights');
+    state.cycle(now, weights);
+    state.setJournal(now, 'Written after the backup');
+
+    await tester.pumpWidget(ProductivityApp(state: state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Backups'));
+    await tester.pumpAndSettle();
+    expect(find.text('Friday 23 October'), findsOneWidget);
+    expect(find.text('Yesterday'), findsOneWidget);
+    await _shoot(tester, 'backups');
+
+    await tester.tap(find.text('Restore').at(1)); // Thursday 22 October
+    await tester.pumpAndSettle();
+    expect(find.text('Replaces everything you have now.'), findsOneWidget);
+    await _shoot(tester, 'backups_confirm');
+    expect(state.statusOf(now, weights), HabitStatus.done, reason: 'nothing happens before confirming');
+
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+    expect(state.statusOf(now, weights), HabitStatus.none);
+    expect(find.text('Written after the backup'), findsNothing, reason: 'the journal reloads too');
+    expect(find.textContaining('Restored 22 October'), findsOneWidget);
+    await _shoot(tester, 'backups_restored');
+    state.store.close();
   });
 
   testWidgets('Today view, month grid and ritual editor', (tester) async {

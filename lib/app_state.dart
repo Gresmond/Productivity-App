@@ -1,24 +1,24 @@
 import 'package:flutter/widgets.dart';
 
+import 'data/backups.dart';
 import 'data/store.dart';
 import 'models.dart';
 
 /// App state backed by [Store]. Keeps habit entries and the current to-do
 /// lists in memory and writes every change straight to SQLite.
 class AppState extends ChangeNotifier {
-  AppState(this.store, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
+  AppState(this.store, {this.backups, DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
     today = dateOnly(_clock());
     viewYear = today.year;
     if (store.isEmpty) _seed();
-    for (final e in store.entries()) {
-      final key = '${e.day}|${e.habitId}';
-      _status[key] = e.status;
-      if (e.note != null) _notes[key] = e.note!;
-    }
-    _startDay();
+    _backUp();
+    _load();
   }
 
   final Store store;
+
+  /// Null where nothing should be written to disk (tests).
+  final Backups? backups;
   final DateTime Function() _clock;
 
   late DateTime today;
@@ -53,7 +53,46 @@ class AppState extends ChangeNotifier {
     if (now == today) return;
     if (viewYear == today.year) viewYear = now.year;
     today = now;
+    _backUp();
     _startDay();
+    notifyListeners();
+  }
+
+  /// Today's copy, taken before anything changes today. A failed backup
+  /// must never stop the app opening.
+  void _backUp() {
+    try {
+      backups?.daily(store, today);
+    } catch (e) {
+      debugPrint('Backup failed: $e');
+    }
+  }
+
+  /// Reads everything from the store into memory.
+  void _load() {
+    _monthHabits.clear();
+    _status.clear();
+    _notes.clear();
+    for (final e in store.entries()) {
+      final key = '${e.day}|${e.habitId}';
+      _status[key] = e.status;
+      if (e.note != null) _notes[key] = e.note!;
+    }
+    themeName = store.setting('theme');
+    themeNotifier.value = themeName;
+    _startDay();
+  }
+
+  /// Bumped by each restore, so widgets holding their own copy of data
+  /// (the journal's text field) start afresh.
+  int restores = 0;
+
+  /// Replaces all data with [backup]. What was there before is kept as a
+  /// backup of its own.
+  Future<void> restore(Backup backup) async {
+    await backups!.restore(store, backup);
+    restores++;
+    _load();
     notifyListeners();
   }
 
