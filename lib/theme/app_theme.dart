@@ -10,9 +10,6 @@ abstract final class Fonts {
 
   /// Labels, day numerals, stats. Same as [body] for now.
   static const ui = body;
-
-  /// Journal and reflections.
-  static const serif = 'Reckless';
 }
 
 /// Every colour the app draws with. Each theme is one instance of this.

@@ -98,13 +98,3 @@ flutter:
           weight: 600
         - asset: assets/fonts/matter/Matter-TRIAL-Bold.otf
           weight: 700
-    - family: Reckless
-      fonts:
-        - asset: assets/fonts/reckless/RecklessStandardM-TRIAL-Light.otf
-          weight: 300
-        - asset: assets/fonts/reckless/RecklessStandardM-TRIAL-Regular.otf
-          weight: 400
-        - asset: assets/fonts/reckless/RecklessStandardM-TRIAL-Medium.otf
-          weight: 500
-        - asset: assets/fonts/reckless/RecklessStandardM-TRIAL-SemiBold.otf
-          weight: 600

@@ -13,12 +13,16 @@ class StatusCell extends StatefulWidget {
     required this.habit,
     this.size = 34,
     this.enabled = true,
+    this.rest = false,
   });
 
   final DateTime day;
   final Habit habit;
   final double size;
   final bool enabled;
+
+  /// A rest day (a weekend, when that's turned on): greyed while blank.
+  final bool rest;
 
   @override
   State<StatusCell> createState() => _StatusCellState();
@@ -139,7 +143,7 @@ class _StatusCellState extends State<StatusCell> with TickerProviderStateMixin {
         onTap: enabled ? () => cycleStatus(context, state, widget.day, widget.habit) : null,
         onSecondaryTap: enabled && status != HabitStatus.none ? () => state.clear(widget.day, widget.habit) : null,
         child: AnimatedOpacity(
-          opacity: enabled ? 1 : 0.35,
+          opacity: !enabled ? 0.35 : (widget.rest && status == HabitStatus.none ? 0.45 : 1),
           duration: const Duration(milliseconds: 420),
           curve: Curves.easeInOutCubic,
           child: cell,

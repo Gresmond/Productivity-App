@@ -208,6 +208,61 @@ void main() {
       state.checkDate();
       expect(state.todos[TodoScope.month]!.map((t) => (t.text, t.carried)), [('Monthly', 1)]);
     });
+
+    test('nothing vanishes when the clock goes back over midnight', () {
+      var now = DateTime(2026, 10, 24, 0, 30); // flew in from further east
+      final state = AppState(Store.memory(), clock: () => now);
+      state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
+      state.addTodo(TodoScope.today, 'Unpack');
+
+      now = DateTime(2026, 10, 23, 23); // landed, an hour and a half behind
+      state.checkDate();
+      expect(state.today, DateTime(2026, 10, 23));
+      expect(state.todos[TodoScope.today]!.map((t) => (t.text, t.carried)), [('Unpack', 0)]);
+
+      now = DateTime(2026, 10, 24, 0, 1);
+      state.checkDate();
+      expect(state.todos[TodoScope.today]!.map((t) => (t.text, t.carried)), [('Unpack', 1)]);
+    });
+  });
+
+  group('streaks', () {
+    // Clocks went forward on 4 October 2026 in Adelaide, making it 23 hours
+    // long. Run with TZ=Australia/Adelaide to check stepping over it.
+    test('step by calendar day over a clock change', () {
+      final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 6));
+      final h = state.habits.first;
+      for (final d in [3, 5, 6]) {
+        state.cycle(DateTime(2026, 10, d), h);
+      }
+      expect(state.currentStreak(h), 2, reason: 'the blank 4th breaks it');
+      expect(state.bestStreak(h), 2);
+    });
+
+    test('a blank weekend is excused only when weekends are rest days', () {
+      final store = Store.memory();
+      var state = AppState(store, clock: () => DateTime(2026, 10, 27)); // Tuesday
+      final h = state.habits.first;
+      for (final d in [22, 23, 26, 27]) {
+        state.cycle(DateTime(2026, 10, d), h); // Thu, Fri, then Mon, Tue
+      }
+      expect(state.currentStreak(h), 2);
+      expect(state.isRestDay(DateTime(2026, 10, 24)), isFalse);
+
+      state.setRestWeekends(true);
+      expect(state.isRestDay(DateTime(2026, 10, 24)), isTrue);
+      expect(state.isRestDay(DateTime(2026, 10, 23)), isFalse);
+      expect(state.currentStreak(h), 4, reason: 'Saturday and Sunday neither break nor add');
+      expect(state.bestStreak(h), 4);
+
+      state.cycle(DateTime(2026, 10, 25), h);
+      expect(state.currentStreak(h), 5, reason: 'a ritual done on a rest day still counts');
+      state.cycle(DateTime(2026, 10, 25), h); // now "not done"
+      expect(state.currentStreak(h), 2, reason: 'marked not done, it breaks the streak');
+
+      state = AppState(store, clock: () => DateTime(2026, 10, 27));
+      expect(state.restWeekends, isTrue, reason: 'remembered');
+    });
   });
 
   group('per-month rituals', () {
@@ -442,6 +497,25 @@ void main() {
     expect(find.text('Stretch'), findsOneWidget);
   });
 
+  testWidgets('a long ritual wraps onto more lines, its row growing to fit', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1000, 720); // a tiled window
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24));
+    state.setRestWeekends(true);
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+
+    final tablets = tester.renderObject<RenderParagraph>(find.text('Creatine, min + fin, vit. D, protein powder'));
+    final weights = tester.renderObject<RenderParagraph>(find.text('Weights'));
+    expect(tablets.didExceedMaxLines, isFalse);
+    expect(tablets.size.height, greaterThan(weights.size.height * 1.5));
+    expect(find.text('Rest day. Nothing you have to do.'), findsOneWidget);
+    await _shoot(tester, 'today_narrow_weekend');
+  });
+
   testWidgets('switching views and months never shows two at once', (tester) async {
     await _loadFonts();
     tester.view.physicalSize = const Size(1440, 900);
@@ -658,13 +732,23 @@ void main() {
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Theme'));
+    await tester.tap(find.byTooltip('Appearance'));
     await tester.pumpAndSettle();
     expect(find.text('Citrus'), findsOneWidget);
     await _shoot(tester, 'theme_menu');
     await tester.tap(find.text('Soft Pastel'));
     await tester.pumpAndSettle();
     expect(state.themeName, 'Soft Pastel');
+
+    await tester.tap(find.byTooltip('Appearance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Weekends as rest days'));
+    await tester.pumpAndSettle();
+    expect(state.restWeekends, isTrue);
+    state.showMonth(10);
+    await tester.pumpAndSettle();
+    await _shoot(tester, 'rest_weekends_month');
+    state.setRestWeekends(false);
 
     for (final palette in palettes) {
       final slug = palette.name.toLowerCase().replaceAll(RegExp('[^a-z]+'), '_');

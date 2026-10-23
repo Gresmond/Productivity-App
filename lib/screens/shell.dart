@@ -446,16 +446,20 @@ class _BackupsButton extends StatelessWidget {
   }
 }
 
-/// Round swatch of the current theme; opens a menu of all themes.
+/// Round swatch of the current theme; opens a menu of all themes, and the
+/// rest-weekends switch.
 class _ThemeButton extends StatelessWidget {
   const _ThemeButton();
+
+  /// The menu value of the rest-weekends item; the others are theme names.
+  static const _restWeekends = '#restWeekends';
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
     return PopupMenuButton<String>(
-      tooltip: 'Theme',
+      tooltip: 'Appearance',
       offset: const Offset(0, 54),
       color: p.tile,
       surfaceTintColor: Colors.transparent,
@@ -466,7 +470,8 @@ class _ThemeButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: p.tileBorder),
       ),
-      onSelected: state.setTheme,
+      onSelected: (value) =>
+          value == _restWeekends ? state.setRestWeekends(!state.restWeekends) : state.setTheme(value),
       itemBuilder: (_) => [
         for (final option in palettes)
           PopupMenuItem(
@@ -501,6 +506,33 @@ class _ThemeButton extends StatelessWidget {
               ],
             ),
           ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: _restWeekends,
+          height: 60,
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Weekends as rest days',
+                      style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Greyed out. A blank one won't break a streak.",
+                      style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _Toggle(on: state.restWeekends),
+            ],
+          ),
+        ),
       ],
       child: Container(
         padding: const EdgeInsets.all(4),
@@ -517,6 +549,39 @@ class _ThemeButton extends StatelessWidget {
           ],
         ),
         child: _Swatch(palette: p, size: 36),
+      ),
+    );
+  }
+}
+
+/// A small switch, drawn to match the app rather than Material's.
+class _Toggle extends StatelessWidget {
+  const _Toggle({required this.on});
+
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: 36,
+      height: 22,
+      padding: const EdgeInsets.all(3),
+      alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(11),
+        gradient: on ? LinearGradient(colors: p.gradient.take(2).toList()) : null,
+        color: on ? null : p.empty,
+        border: on ? null : Border.all(color: p.tileBorder),
+      ),
+      child: Container(
+        width: 16,
+        height: 16,
+        decoration: BoxDecoration(
+          color: on ? p.onAccent : p.tile,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [BoxShadow(color: p.shadow.withValues(alpha: 0.2), blurRadius: 3, offset: const Offset(0, 1))],
+        ),
       ),
     );
   }

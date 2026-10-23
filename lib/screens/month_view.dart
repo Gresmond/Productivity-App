@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../app_state.dart';
@@ -230,7 +231,7 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
         ];
         final layout = _ColumnLayout(shown: _shown, colFor: colFor, days: [for (final c in columns) c.number]);
 
-        Widget grid = Column(
+        final days = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // The headers are a plain row of 31 boxes, cheap enough to lay
@@ -248,7 +249,7 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
                         _Column(
                           width: col * (shown - c.number + 1).clamp(0.0, 1.0),
                           full: col,
-                          child: _DayHeader(day: c.day, isToday: c.day == state.today),
+                          child: _DayHeader(day: c.day, isToday: c.day == state.today, rest: state.isRestDay(c.day)),
                         ),
                   ],
                 );
@@ -274,11 +275,40 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
                           habit: h,
                           size: cell,
                           enabled: !c.leaving && !c.day.isAfter(state.today),
+                          rest: state.isRestDay(c.day),
                         ),
                       ),
                   ],
                 ),
               ),
+          ],
+        );
+
+        Widget grid = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Positioned.fill(
+                  left: nameWidth,
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: state.restWeekends ? 1 : 0,
+                      duration: _morph,
+                      curve: Curves.easeInOutCubic,
+                      child: CustomPaint(
+                        painter: _RestBandPainter(
+                          layout: layout,
+                          weekend: [for (final c in columns) c.day.weekday >= DateTime.saturday],
+                          color: p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.09 : 0.06),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                days,
+              ],
+            ),
             const SizedBox(height: 26),
             Row(
               children: [
@@ -471,6 +501,49 @@ class _HighlightPainter extends CustomPainter {
       old.clickableDays != clickableDays || old.cellSize != cellSize || old.color != color || old.layout != layout;
 }
 
+/// A soft band down each run of weekend columns, behind the day headers and
+/// squares, marking them as rest days. Follows the columns through a morph.
+class _RestBandPainter extends CustomPainter {
+  _RestBandPainter({required this.layout, required this.weekend, required this.color}) : super(repaint: layout.shown);
+
+  final _ColumnLayout layout;
+
+  /// Whether each of the layout's columns falls on a weekend.
+  final List<bool> weekend;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final col = layout.col;
+    final paint = Paint()..color = color;
+    double? start;
+    var end = 0.0;
+    void band() {
+      if (start == null || end - start < 4) return;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTRB(start + 1, -4, end - 1, size.height + 4), const Radius.circular(12)),
+        paint,
+      );
+    }
+
+    for (final (i, d) in layout.days.indexed) {
+      final width = col * layout.fraction(d);
+      if (weekend[i] && width > 0) {
+        start ??= (d - 1) * col;
+        end = (d - 1) * col + width;
+      } else {
+        band();
+        start = null;
+      }
+    }
+    band();
+  }
+
+  @override
+  bool shouldRepaint(_RestBandPainter old) =>
+      old.layout != layout || old.color != color || !listEquals(old.weekend, weekend);
+}
+
 /// Fades and grows its child in when first built, if [animate].
 class _FadeIn extends StatefulWidget {
   const _FadeIn({super.key, required this.animate, required this.child});
@@ -555,14 +628,22 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
           width: widget.nameWidth,
           child: Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: Text(
-              widget.habit.name,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: Fonts.body,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-                color: p.ink,
+            // A long name wraps onto a second line, set a little tighter so
+            // the row barely grows.
+            child: Tooltip(
+              message: widget.habit.name,
+              waitDuration: const Duration(milliseconds: 600),
+              child: Text(
+                widget.habit.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: Fonts.body,
+                  fontSize: 13.5,
+                  height: 1.15,
+                  fontWeight: FontWeight.w500,
+                  color: p.ink,
+                ),
               ),
             ),
           ),
@@ -723,6 +804,7 @@ class _EditableRow extends StatefulWidget {
 
 class _EditableRowState extends State<_EditableRow> {
   late final _controller = TextEditingController(text: widget.habit.name);
+  late String _before = widget.habit.name;
 
   @override
   void dispose() {
@@ -756,11 +838,23 @@ class _EditableRowState extends State<_EditableRow> {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: TextField(
-              controller: _controller,
-              style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
-              decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-              onChanged: (v) => state.renameHabit(widget.year, widget.month, widget.habit, v),
+            // Renames as you type, but a ritual can't be blank: leaving the
+            // field empty puts back the name it had before you started.
+            child: Focus(
+              onFocusChange: (focused) {
+                if (focused) {
+                  _before = _controller.text;
+                } else if (_controller.text.trim().isEmpty) {
+                  _controller.text = _before;
+                  state.renameHabit(widget.year, widget.month, widget.habit, _before);
+                }
+              },
+              child: TextField(
+                controller: _controller,
+                style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
+                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                onChanged: (v) => state.renameHabit(widget.year, widget.month, widget.habit, v),
+              ),
             ),
           ),
           IconButton(
@@ -815,10 +909,13 @@ class _PillButton extends StatelessWidget {
 }
 
 class _DayHeader extends StatelessWidget {
-  const _DayHeader({required this.day, required this.isToday});
+  const _DayHeader({required this.day, required this.isToday, required this.rest});
 
   final DateTime day;
   final bool isToday;
+
+  /// A weekend shown as a rest day: greyed.
+  final bool rest;
 
   static const _morph = Duration(milliseconds: 420);
 
@@ -826,7 +923,7 @@ class _DayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final weekend = day.weekday >= DateTime.saturday;
-    final fg = isToday ? p.onAccent : (weekend ? p.other : p.inkMuted);
+    final fg = isToday ? p.onAccent : (rest ? p.inkMuted.withValues(alpha: 0.6) : (weekend ? p.other : p.inkMuted));
     final letter = weekdayNames[day.weekday - 1][0];
     // Fills its column (less a small gap), so it follows the column's
     // width through a morph without being rebuilt.
@@ -894,7 +991,7 @@ class _DayHeader extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: Fonts.ui,
                     fontSize: 12.5,
-                    color: isToday ? p.onAccent : p.ink,
+                    color: isToday ? p.onAccent : (rest ? p.inkMuted.withValues(alpha: 0.75) : p.ink),
                     fontWeight: FontWeight.w600,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),

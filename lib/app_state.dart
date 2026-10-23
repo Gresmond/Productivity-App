@@ -51,10 +51,26 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Weekends shown greyed as rest days. A blank rest day doesn't break a
+  /// streak; a ritual done on one still counts.
+  late bool restWeekends = store.setting('restWeekends') == '1';
+
+  void setRestWeekends(bool rest) {
+    restWeekends = rest;
+    store.setSetting('restWeekends', rest ? '1' : '0');
+    _streaks.clear();
+    notifyListeners();
+  }
+
+  bool isRestDay(DateTime day) => restWeekends && day.weekday >= DateTime.saturday;
+
   final Map<(int, int), List<Habit>> _monthHabits = {};
   final Map<String, HabitStatus> _status = {};
   final Map<String, String> _notes = {};
   final Map<TodoScope, List<TodoItem>> todos = {};
+
+  /// (current, best) streak by ritual id, until a mark or the day changes.
+  final Map<int, (int, int)> _streaks = {};
 
   String _cell(DateTime day, Habit h) => '${dateKey(day)}|${h.id}';
 
@@ -65,6 +81,7 @@ class AppState extends ChangeNotifier {
     if (now == today) return;
     if (viewYear == today.year) viewYear = now.year;
     today = now;
+    _streaks.clear();
     _backUp();
     _startDay();
     notifyListeners();
@@ -92,6 +109,8 @@ class AppState extends ChangeNotifier {
     }
     themeName = _savedTheme();
     themeNotifier.value = themeName;
+    restWeekends = store.setting('restWeekends') == '1';
+    _streaks.clear();
     _startDay();
   }
 
@@ -224,6 +243,7 @@ class AppState extends ChangeNotifier {
     } else {
       _status[key] = next;
     }
+    _streaks.remove(h.id);
     store.setEntry(dateKey(day), h.id, next);
     notifyListeners();
     return next;
@@ -234,6 +254,7 @@ class AppState extends ChangeNotifier {
     final key = _cell(day, h);
     if (_status.remove(key) == null) return;
     _notes.remove(key);
+    _streaks.remove(h.id);
     store.setEntry(dateKey(day), h.id, HabitStatus.none);
     notifyListeners();
   }
@@ -254,26 +275,36 @@ class AppState extends ChangeNotifier {
       habits.where((h) => statusOf(day, h) == HabitStatus.done).length;
 
   /// Consecutive done days ending today (or yesterday, if today is still
-  /// open). An "other" day is excused: it neither breaks nor extends a streak.
-  int currentStreak(Habit h) {
+  /// open). An "other" day, or a blank rest day, is excused: it neither
+  /// breaks nor extends a streak.
+  int currentStreak(Habit h) => _streaksOf(h).$1;
+
+  int bestStreak(Habit h) => _streaksOf(h).$2;
+
+  bool _excused(DateTime day, HabitStatus s) =>
+      s == HabitStatus.other || (s == HabitStatus.none && isRestDay(day));
+
+  (int, int) _streaksOf(Habit h) => _streaks[h.id] ??= (_current(h), _best(h));
+
+  int _current(Habit h) {
+    // Steps by calendar day, not 24 hours: a day with a clock change is 23
+    // or 25 hours long.
     var day = today;
-    if (statusOf(day, h) != HabitStatus.done) {
-      day = day.subtract(const Duration(days: 1));
-    }
+    if (statusOf(day, h) != HabitStatus.done) day = DateTime(day.year, day.month, day.day - 1);
     var streak = 0;
     for (var i = 0; i < 365; i++) {
       final s = statusOf(day, h);
       if (s == HabitStatus.done) {
         streak++;
-      } else if (s != HabitStatus.other) {
+      } else if (!_excused(day, s)) {
         break;
       }
-      day = day.subtract(const Duration(days: 1));
+      day = DateTime(day.year, day.month, day.day - 1);
     }
     return streak;
   }
 
-  int bestStreak(Habit h) {
+  int _best(Habit h) {
     var best = 0, run = 0;
     var day = DateTime(today.year - 1, 1, 1);
     while (!day.isAfter(today)) {
@@ -281,7 +312,7 @@ class AppState extends ChangeNotifier {
       if (s == HabitStatus.done) {
         run++;
         if (run > best) best = run;
-      } else if (s != HabitStatus.other) {
+      } else if (!_excused(day, s)) {
         run = 0;
       }
       day = DateTime(day.year, day.month, day.day + 1);

@@ -211,10 +211,15 @@ class Store {
 
   /// Moves unfinished to-dos from earlier periods into [period]. Returns how
   /// many moved.
+  ///
+  /// Also brings back any from later periods, uncounted: those were carried
+  /// ahead before the clock went back (travelling west over midnight), and
+  /// would otherwise vanish until the date caught up.
   int carryForward(TodoScope scope, String period) {
     _db.execute(
-      'UPDATE todos SET period = ?, carried = carried + 1 WHERE scope = ? AND done = 0 AND period < ?',
-      [period, scope.name, period],
+      'UPDATE todos SET carried = carried + (period < ?), period = ? '
+      'WHERE scope = ? AND done = 0 AND period != ?',
+      [period, period, scope.name, period],
     );
     return _db.updatedRows;
   }

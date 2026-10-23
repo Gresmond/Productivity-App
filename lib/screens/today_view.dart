@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -76,6 +77,64 @@ class TodayView extends StatelessWidget {
 class _HabitsCard extends StatelessWidget {
   const _HabitsCard();
 
+  static const _minRow = 34.0, _maxRow = 52.0;
+
+  /// Rows share the card's height, 34 to 52px each, and scroll only below
+  /// that. A name too long for one line wraps, and its row grows to fit,
+  /// taking the space from the others. If that would make the list scroll,
+  /// the week trails make way to give the names more room.
+  static ({List<double> heights, double cell, bool trail}) _layOutRows(
+    BuildContext context,
+    List<Habit> habits,
+    BoxConstraints constraints,
+  ) {
+    if (habits.isEmpty) return (heights: const [], cell: 32, trail: false);
+    final width = constraints.maxWidth, height = constraints.maxHeight;
+    final cell = (height / habits.length).clamp(_minRow, _maxRow) - 10;
+    final scaler = MediaQuery.textScalerOf(context);
+
+    ({List<double> heights, double cell, bool trail}) layOut({required bool trail}) {
+      // Everything else in a row is a fixed width; the name gets the rest.
+      final nameWidth = width - _HabitRow.fixedWidth - (trail ? _HabitRow.weekTrailWidth : 0) - cell.clamp(24, 32);
+      double rowFor(String name) {
+        final painter = TextPainter(
+          text: TextSpan(text: name, style: _HabitRow.nameStyle),
+          maxLines: _HabitRow.nameLines,
+          textDirection: TextDirection.ltr,
+          textScaler: scaler,
+        )..layout(maxWidth: nameWidth.clamp(0, double.infinity));
+        final textHeight = painter.height;
+        painter.dispose();
+        return textHeight + 14;
+      }
+
+      final needed = [for (final h in habits) rowFor(h.name)];
+      // Tall rows take what they need; the rest share what's left. Each
+      // round can only shrink the share, so a few rounds settle it.
+      var extent = (height / habits.length).clamp(_minRow, _maxRow);
+      for (var round = 0; round < 3; round++) {
+        final tall = [
+          for (final n in needed)
+            if (n > extent) n,
+        ];
+        if (tall.length == habits.length) break;
+        final left = height - tall.fold(0.0, (a, b) => a + b);
+        final share = (left / (habits.length - tall.length)).clamp(_minRow, _maxRow);
+        if (share == extent) break;
+        extent = share;
+      }
+      return (
+        heights: [for (final n in needed) n > extent ? n : extent],
+        cell: (extent - 10).clamp(24.0, 32.0),
+        trail: trail,
+      );
+    }
+
+    final withTrail = layOut(trail: width >= _HabitRow.weekTrailFrom);
+    if (!withTrail.trail || withTrail.heights.fold(0.0, (a, b) => a + b) <= height + 0.5) return withTrail;
+    return layOut(trail: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -99,7 +158,11 @@ class _HabitsCard extends StatelessWidget {
                     const TileHeader(title: 'Daily rituals'),
                     const SizedBox(height: 6),
                     Text(
-                      done == total && total > 0 ? 'Every ritual done. Beautiful.' : '${total - done} still to go today',
+                      done == total && total > 0
+                          ? 'Every ritual done. Beautiful.'
+                          : state.isRestDay(day)
+                          ? 'Rest day. Nothing you have to do.'
+                          : '${total - done} still to go today',
                       style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
                     ),
                   ],
@@ -112,18 +175,13 @@ class _HabitsCard extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Share the height between rows; scroll only below 34px each.
-                final extent = total == 0 ? 44.0 : (constraints.maxHeight / total).clamp(34.0, 52.0);
+                final rows = _layOutRows(context, habits, constraints);
                 return ListView.builder(
                   padding: EdgeInsets.zero,
-                  itemExtent: extent,
+                  itemExtentBuilder: (i, _) => i < total ? rows.heights[i] : null,
                   itemCount: total,
-                  itemBuilder: (context, i) => _HabitRow(
-                    habit: habits[i],
-                    day: day,
-                    cellSize: (extent - 10).clamp(24.0, 32.0),
-                    divider: i > 0,
-                  ),
+                  itemBuilder: (context, i) =>
+                      _HabitRow(habit: habits[i], day: day, cellSize: rows.cell, weekTrail: rows.trail, divider: i > 0),
                 );
               },
             ),
@@ -198,11 +256,33 @@ class _HoverHighlightState extends State<_HoverHighlight> {
 }
 
 class _HabitRow extends StatelessWidget {
-  const _HabitRow({required this.habit, required this.day, required this.cellSize, required this.divider});
+  const _HabitRow({
+    required this.habit,
+    required this.day,
+    required this.cellSize,
+    required this.weekTrail,
+    required this.divider,
+  });
+
+  static const nameStyle = TextStyle(fontFamily: Fonts.body, fontSize: 13.5, fontWeight: FontWeight.w500);
+
+  /// Long names wrap onto up to this many lines before they're cut short.
+  static const nameLines = 3;
+
+  /// Rows at least this wide show the last week's marks.
+  static const weekTrailFrom = 240.0;
+  static const weekTrailWidth = 10.0 + 7 * (6 + 3);
+
+  /// Padding, gaps and the streak badge: the row less its name, week trail
+  /// and square.
+  static const fixedWidth = 2 * 8.0 + 8 + 44 + 8;
 
   final Habit habit;
   final DateTime day;
   final double cellSize;
+
+  /// Whether to show the last week's marks (the card decides, for all rows).
+  final bool weekTrail;
   final bool divider;
 
   @override
@@ -212,87 +292,76 @@ class _HabitRow extends StatelessWidget {
     final streak = state.currentStreak(habit);
     final best = state.bestStreak(habit);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showWeekTrail = constraints.maxWidth >= 240;
-
-        return _HoverHighlight(
-          divider: divider,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Tooltip(
-                    message: habit.name,
-                    waitDuration: const Duration(milliseconds: 600),
-                    child: Text(
-                      habit.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: Fonts.body,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        color: p.ink,
-                      ),
-                    ),
-                  ),
+    return _HoverHighlight(
+      divider: divider,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Tooltip(
+                message: habit.name,
+                waitDuration: const Duration(milliseconds: 600),
+                child: Text(
+                  habit.name,
+                  maxLines: nameLines,
+                  overflow: TextOverflow.ellipsis,
+                  style: nameStyle.copyWith(color: p.ink),
                 ),
-                if (showWeekTrail) ...[
-                  const SizedBox(width: 10),
-                  _WeekTrail(habit: habit, day: day),
-                ],
-                const SizedBox(width: 8),
-                Tooltip(
-                  message: streak == 0
-                      ? (best > 0 ? 'Best streak: $best days' : 'No streak yet')
-                      : '$streak day streak${best > streak ? '  ·  best $best' : ''}',
-                  child: SizedBox(
-                    width: 44,
-                    child: Center(
-                      child: streak > 0
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                              decoration: BoxDecoration(
-                                color: p.accent.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.local_fire_department_rounded, size: 12, color: p.accent),
-                                  const SizedBox(width: 1.5),
-                                  Text(
-                                    '$streak',
-                                    style: TextStyle(
-                                      fontFamily: Fonts.ui,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: p.accent,
-                                      fontFeatures: const [FontFeature.tabularFigures()],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Text(
-                              '–',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: p.inkMuted.withValues(alpha: 0.4),
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                StatusCell(day: day, habit: habit, size: cellSize),
-              ],
+              ),
             ),
-          ),
-        );
-      },
+            if (weekTrail) ...[
+              const SizedBox(width: 10),
+              _WeekTrail(habit: habit, day: day),
+            ],
+            const SizedBox(width: 8),
+            Tooltip(
+              message: streak == 0
+                  ? (best > 0 ? 'Best streak: $best days' : 'No streak yet')
+                  : '$streak day streak${best > streak ? '  ·  best $best' : ''}',
+              child: SizedBox(
+                width: 44,
+                child: Center(
+                  child: streak > 0
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: p.accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.local_fire_department_rounded, size: 12, color: p.accent),
+                              const SizedBox(width: 1.5),
+                              Text(
+                                '$streak',
+                                style: TextStyle(
+                                  fontFamily: Fonts.ui,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: p.accent,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Text(
+                          '–',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: p.inkMuted.withValues(alpha: 0.4),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            StatusCell(day: day, habit: habit, size: cellSize, rest: state.isRestDay(day)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -310,24 +379,25 @@ class _WeekTrail extends StatelessWidget {
     final state = AppScope.of(context);
     return Row(
       children: [
-        for (var i = 7; i >= 1; i--)
-          Container(
-            margin: const EdgeInsets.only(left: 3),
-            width: 6,
-            height: 8,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(2.5),
-              color: switch (state.statusOf(DateTime(day.year, day.month, day.day - i), habit)) {
-                HabitStatus.none => p.empty,
-                HabitStatus.done => p.done,
-                HabitStatus.missed => p.missed.withValues(alpha: 0.75),
-                HabitStatus.other => p.other,
-              },
-            ),
-          ),
+        for (var i = 7; i >= 1; i--) _mark(p, state, DateTime(day.year, day.month, day.day - i)),
       ],
     );
   }
+
+  Widget _mark(Palette p, AppState state, DateTime past) => Container(
+    margin: const EdgeInsets.only(left: 3),
+    width: 6,
+    height: 8,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(2.5),
+      color: switch (state.statusOf(past, habit)) {
+        HabitStatus.none => state.isRestDay(past) ? p.empty.withValues(alpha: 0.45) : p.empty,
+        HabitStatus.done => p.done,
+        HabitStatus.missed => p.missed.withValues(alpha: 0.75),
+        HabitStatus.other => p.other,
+      },
+    ),
+  );
 }
 
 class _JournalCard extends StatefulWidget {
@@ -339,18 +409,40 @@ class _JournalCard extends StatefulWidget {
 
 class _JournalCardState extends State<_JournalCard> {
   TextEditingController? _controller;
+  late AppState _state;
+
+  /// The day this card writes to. A new card takes over at midnight; words
+  /// typed just before it still land on the day they were typed.
+  late DateTime _day;
+
+  /// Saves a moment after typing stops, rather than writing the database
+  /// and the day's file on every keystroke.
+  Timer? _pending;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _state = AppScope.of(context);
     if (_controller == null) {
-      final state = AppScope.of(context);
-      _controller = TextEditingController(text: state.journalOf(state.today));
+      _day = _state.today;
+      _controller = TextEditingController(text: _state.journalOf(_day));
     }
+  }
+
+  void _changed(String _) {
+    _pending?.cancel();
+    _pending = Timer(const Duration(milliseconds: 400), _save);
+  }
+
+  void _save() {
+    _pending?.cancel();
+    _pending = null;
+    _state.setJournal(_day, _controller!.text);
   }
 
   @override
   void dispose() {
+    if (_pending != null) _save();
     _controller?.dispose();
     super.dispose();
   }
@@ -367,7 +459,7 @@ class _JournalCardState extends State<_JournalCard> {
         children: [
           TileHeader(
             title: 'Journal',
-            trailing: state.journalFiles == null ? null : _OpenFolderButton(state.journalFiles!.fileFor(state.today)),
+            trailing: state.journalFiles == null ? null : _OpenFolderButton(state.journalFiles!.fileFor(_day)),
           ),
           const SizedBox(height: 6),
           Expanded(
@@ -385,7 +477,7 @@ class _JournalCardState extends State<_JournalCard> {
               decoration: const InputDecoration(
                 border: InputBorder.none,
               ),
-              onChanged: (v) => state.setJournal(state.today, v),
+              onChanged: _changed,
             ),
           ),
         ],
