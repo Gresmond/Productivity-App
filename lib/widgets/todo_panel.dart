@@ -419,7 +419,7 @@ class _Check extends StatelessWidget {
         height: 20,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: done ? LinearGradient(colors: [p.done, p.other]) : null,
+          color: done ? p.done : null,
           border: done
               ? null
               : Border.all(color: p.inkMuted.withValues(alpha: 0.38), width: 1.5),

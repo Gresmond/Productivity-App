@@ -246,7 +246,10 @@ class _TabBarState extends State<_TabBar> {
         Row(
           children: [
             for (final (i, tab) in widget.tabs.indexed) ...[
+              // The gap sits outside the measured tab, so the pill centres on
+              // the label.
               KeyedSubtree(key: _keys[i], child: tab),
+              const SizedBox(width: 2),
               if (i == 0)
                 Container(
                   width: 1,
@@ -300,35 +303,32 @@ class _TabState extends State<_Tab> {
 
     // The selected background is the bar's gliding pill; a tab only draws
     // its hover shade, and its text colour eases as the pill arrives.
-    return Padding(
-      padding: const EdgeInsets.only(right: 2),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30),
-              color: !selected && _hover ? p.empty : p.empty.withValues(alpha: 0),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Reserves the bold width, so selecting a tab never resizes the bar.
-                Visibility.maintain(visible: false, child: Text(widget.label, style: style(FontWeight.w600))),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 360),
-                  curve: Curves.easeInOutCubic,
-                  style: style(selected || widget.isCurrent ? FontWeight.w600 : FontWeight.w500),
-                  child: Text(widget.label),
-                ),
-              ],
-            ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            color: !selected && _hover ? p.empty : p.empty.withValues(alpha: 0),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Reserves the bold width, so selecting a tab never resizes the bar.
+              Visibility.maintain(visible: false, child: Text(widget.label, style: style(FontWeight.w600))),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 360),
+                curve: Curves.easeInOutCubic,
+                style: style(selected || widget.isCurrent ? FontWeight.w600 : FontWeight.w500),
+                child: Text(widget.label),
+              ),
+            ],
           ),
         ),
       ),
@@ -553,8 +553,13 @@ class _ThemeButton extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<String> _switchItem(Palette p,
-      {required String value, required String title, required String subtitle, required bool on}) {
+  PopupMenuItem<String> _switchItem(
+    Palette p, {
+    required String value,
+    required String title,
+    required String subtitle,
+    required bool on,
+  }) {
     return PopupMenuItem(
       value: value,
       height: 60,
@@ -623,10 +628,7 @@ class _DayStartEntryState extends State<_DayStartEntry> {
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: p.empty.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(20),
-            ),
+            decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(20)),
             child: Row(
               children: [
                 for (final hour in _DayStartEntry.hours)
