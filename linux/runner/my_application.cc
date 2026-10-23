@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "tray.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -39,10 +40,7 @@ static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
   if (self->window != nullptr) {
     self->background = FALSE;
-    // Showing a hidden window maps it afresh, so window rules (such as
-    // sending it to the scratchpad) apply each time it opens.
-    gtk_widget_show(GTK_WIDGET(self->window));
-    gtk_window_present(self->window);
+    tray_show_window(self->window);
     return;
   }
 
@@ -51,6 +49,7 @@ static void my_application_activate(GApplication* application) {
   self->window = window;
   g_signal_connect(window, "delete-event", G_CALLBACK(delete_event_cb),
                    nullptr);
+  tray_start(GTK_APPLICATION(application), window);
 
   // No title bar: the app's own header is the top of the window. The title
   // still names the window in task switchers and window lists.
