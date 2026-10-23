@@ -7,6 +7,7 @@ import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/fade_through.dart';
+import '../widgets/hover_fill.dart';
 import '../widgets/progress_ring.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
@@ -264,43 +265,31 @@ class _HoverHighlightState extends State<_HoverHighlight> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: Stack(
-        // The list gives each row a fixed height; the row fills it.
-        fit: StackFit.passthrough,
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: _hover ? 1 : 0,
-                duration: Motion.hover,
-                curve: Motion.hoverCurve,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: p.empty.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(10),
+      child: HoverFill(
+        hover: _hover,
+        child: Stack(
+          // The list gives each row a fixed height; the row fills it.
+          fit: StackFit.passthrough,
+          children: [
+            // The divider fades out as the highlight fades in, rather than
+            // swapping borders mid-animation.
+            if (widget.divider)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: _hover ? 0 : 1,
+                    duration: Motion.hover,
+                    curve: Motion.hoverCurve,
+                    child: ColoredBox(color: p.tileBorder.withValues(alpha: 0.5), child: const SizedBox(height: 1)),
                   ),
                 ),
               ),
-            ),
-          ),
-          // The divider fades out as the highlight fades in, rather than
-          // swapping borders mid-animation.
-          if (widget.divider)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: _hover ? 0 : 1,
-                  duration: Motion.hover,
-                  curve: Motion.hoverCurve,
-                  child: ColoredBox(color: p.tileBorder.withValues(alpha: 0.5), child: const SizedBox(height: 1)),
-                ),
-              ),
-            ),
-          widget.child,
-        ],
+            widget.child,
+          ],
+        ),
       ),
     );
   }

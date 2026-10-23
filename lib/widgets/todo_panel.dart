@@ -7,6 +7,7 @@ import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import 'appear.dart';
+import 'hover_fill.dart';
 import 'mark.dart';
 import 'tile.dart';
 
@@ -396,83 +397,82 @@ class _TodoRowState extends State<_TodoRow> {
           onTapUp: (_) => setState(() => _pressed = false),
           onTapCancel: () => setState(() => _pressed = false),
           onTap: () => state.toggleTodo(item),
-          child: AnimatedContainer(
-            duration: Motion.hover,
-            curve: Motion.hoverCurve,
-            margin: const EdgeInsets.symmetric(vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: _hover ? p.empty.withValues(alpha: 0.35) : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                _Check(done: item.done, hover: _hover, pressed: _pressed),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: AnimatedDefaultTextStyle(
-                    duration: Motion.click,
-                    curve: Motion.clickCurve,
-                    style: TextStyle(
-                      fontFamily: Fonts.body,
-                      fontSize: 14,
-                      height: 1.35,
-                      color: item.done
-                          ? p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.75 : 0.7)
-                          : p.ink,
-                      decoration: item.done ? TextDecoration.lineThrough : null,
-                      decorationColor: p.inkMuted.withValues(alpha: 0.45),
-                    ),
-                    child: Text(item.text, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-                if (item.carried > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                    decoration: BoxDecoration(
-                      color: p.missed.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.history_rounded, size: 11, color: p.missed),
-                        const SizedBox(width: 3),
-                        Text(
-                          'carried ×${item.carried}',
-                          style: TextStyle(
-                            fontFamily: Fonts.ui,
-                            fontSize: 10.5,
-                            color: p.missed,
-                            fontWeight: FontWeight.w600,
-                          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: HoverFill(
+              hover: _hover,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: Row(
+                  children: [
+                    _Check(done: item.done, hover: _hover, pressed: _pressed),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: AnimatedDefaultTextStyle(
+                        duration: Motion.click,
+                        curve: Motion.clickCurve,
+                        style: TextStyle(
+                          fontFamily: Fonts.body,
+                          fontSize: 14,
+                          height: 1.35,
+                          color: item.done
+                              ? p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.75 : 0.7)
+                              : p.ink,
+                          decoration: item.done ? TextDecoration.lineThrough : null,
+                          decorationColor: p.inkMuted.withValues(alpha: 0.45),
                         ),
-                      ],
+                        child: Text(item.text, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
                     ),
-                  ),
-                ],
-                AnimatedOpacity(
-                  opacity: _hover ? 1 : 0,
-                  duration: Motion.hover,
-                  curve: Motion.hoverCurve,
-                  child: Tooltip(
-                    message: 'Remove',
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: _hover && !_leaving ? () => setState(() => _leaving = true) : null,
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: p.empty.withValues(alpha: 0.8)),
-                          child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
+                    if (item.carried > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: p.missed.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.history_rounded, size: 11, color: p.missed),
+                            const SizedBox(width: 3),
+                            Text(
+                              'carried ×${item.carried}',
+                              style: TextStyle(
+                                fontFamily: Fonts.ui,
+                                fontSize: 10.5,
+                                color: p.missed,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    AnimatedOpacity(
+                      opacity: _hover ? 1 : 0,
+                      duration: Motion.hover,
+                      curve: Motion.hoverCurve,
+                      child: Tooltip(
+                        message: 'Remove',
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: _hover && !_leaving ? () => setState(() => _leaving = true) : null,
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: p.empty.withValues(alpha: 0.8)),
+                              child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
