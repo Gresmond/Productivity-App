@@ -103,9 +103,9 @@ void main() {
         ('Dark', 'Lunar Eclipse'),
         ('Eclipse', 'Lunar Eclipse'),
         ('Soft Pastel', 'Pastel'),
-        ('Sage & Sunset', 'Citrus'),
+        ('Sage & Sunset', 'Solar Eclipse'),
         ('Sunset', 'Sunrise'),
-        ('Citrus', 'Citrus'),
+        ('Citrus', 'Solar Eclipse'),
       ]) {
         final store = Store.memory()..setSetting('theme', old);
         expect(AppState(store).themeName, now, reason: old);
@@ -119,14 +119,14 @@ void main() {
     test('every theme has a partner of the other brightness', () {
       expect(palettes.map((p) => p.name), [
         'Solar Eclipse', 'Lunar Eclipse', 'Pastel', 'Dark Pastel',
-        'Citrus', 'Dark Citrus', 'Sunrise', 'Sunset',
+        'Sunrise', 'Sunset',
       ]);
       for (final p in palettes) {
         expect(partnerOf(p.name, dark: true).brightness, Brightness.dark);
         expect(partnerOf(p.name, dark: false).brightness, Brightness.light);
       }
       expect(partnerOf('Sunrise', dark: true).name, 'Sunset');
-      expect(partnerOf('Dark Citrus', dark: false).name, 'Citrus');
+      expect(partnerOf('Dark Pastel', dark: false).name, 'Pastel');
     });
 
     test('follows night light, and a manual pick holds until it changes', () {
@@ -135,23 +135,23 @@ void main() {
       state.nightLightIs(true);
       expect(state.themeName, 'Dark Pastel');
       state.nightLightIs(true);
-      state.setTheme('Citrus');
+      state.setTheme('Sunrise');
       state.nightLightIs(true);
-      expect(state.themeName, 'Citrus', reason: 'held until night light changes');
+      expect(state.themeName, 'Sunrise', reason: 'held until night light changes');
       state.nightLightIs(false);
-      expect(state.themeName, 'Citrus');
+      expect(state.themeName, 'Sunrise');
 
       // A restart alone doesn't switch; a change while closed does.
       state = AppState(store)..nightLightIs(false);
-      expect(state.themeName, 'Citrus');
+      expect(state.themeName, 'Sunrise');
       state = AppState(store)..nightLightIs(true);
-      expect(state.themeName, 'Dark Citrus');
+      expect(state.themeName, 'Sunset');
 
       state.setFollowNightLight(false);
       state.nightLightIs(false);
-      expect(state.themeName, 'Dark Citrus');
+      expect(state.themeName, 'Sunset');
       state.setFollowNightLight(true);
-      expect(state.themeName, 'Citrus', reason: 'turning it on matches night light now');
+      expect(state.themeName, 'Sunrise', reason: 'turning it on matches night light now');
       expect(AppState(store).followNightLight, isTrue);
       store.close();
     });
@@ -1027,7 +1027,7 @@ void main() {
     state.nightLightAvailable = true;
     await tester.tap(find.byTooltip('Appearance'));
     await tester.pumpAndSettle();
-    expect(find.text('Citrus'), findsOneWidget);
+    expect(find.text('Sunrise'), findsOneWidget);
     expect(find.text('Follow night light'), findsOneWidget);
     await _shoot(tester, 'theme_menu');
     await tester.tap(find.text('Pastel'));

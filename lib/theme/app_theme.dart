@@ -176,46 +176,6 @@ const darkPastelPalette = Palette(
   shadow: Color(0xFF000000),
 );
 
-/// Earthy Nordic sage with citrus amber and terracotta.
-const citrusPalette = Palette(
-  name: 'Citrus',
-  brightness: Brightness.light,
-  background: Color(0xFFEFF2EB),
-  tile: Color(0xFFFBFCFA),
-  tileBorder: Color(0xFFDCE2D5),
-  ink: Color(0xFF222B20),
-  inkMuted: Color(0xFF6C7A68),
-  accent: Color(0xFF4D754A),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF527E4E), Color(0xFFD49250), Color(0xFFD15F4E)],
-  today: Color(0xFF3F7A74),
-  done: Color(0xFF5D8C57),
-  missed: Color(0xFFCF6554),
-  other: Color(0xFFDB9746),
-  empty: Color(0xFFE2E7DC),
-  shadow: Color(0xFF394A36),
-);
-
-/// Citrus after dark: warm charcoal with olive, mustard and terracotta.
-const darkCitrusPalette = Palette(
-  name: 'Dark Citrus',
-  brightness: Brightness.dark,
-  background: Color(0xFF161612),
-  tile: Color(0xFF20201A),
-  tileBorder: Color(0xFF33332A),
-  ink: Color(0xFFF3F1E6),
-  inkMuted: Color(0xFFA4A28E),
-  accent: Color(0xFFC9B458),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF8FA65A), Color(0xFFE6B04E), Color(0xFFE0714F)],
-  today: Color(0xFF6E8A4E),
-  done: Color(0xFF94AE5E),
-  missed: Color(0xFFE27556),
-  other: Color(0xFFEBB64C),
-  empty: Color(0xFF2A2A22),
-  shadow: Color(0xFF000000),
-);
-
 /// Warm peach blush, coral rose and dusk plum.
 const sunrisePalette = Palette(
   name: 'Sunrise',
@@ -260,7 +220,6 @@ const sunsetPalette = Palette(
 const palettePairs = [
   (solarEclipsePalette, lunarEclipsePalette),
   (pastelPalette, darkPastelPalette),
-  (citrusPalette, darkCitrusPalette),
   (sunrisePalette, sunsetPalette),
 ];
 

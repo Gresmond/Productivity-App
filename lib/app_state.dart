@@ -55,30 +55,40 @@ class AppState extends ChangeNotifier {
   late String? themeName = _savedTheme();
   late final ValueNotifier<String?> themeNotifier = ValueNotifier(themeName);
 
-  /// Brings names from before the light/dark pairs up to date. The old
-  /// Sunset was light and is now Sunrise, so this runs only once per
-  /// database (a restored backup may need it again).
+  /// Brings saved names up to date: version 2 paired the themes light and
+  /// dark (the old Sunset was light and is now Sunrise), version 3 dropped
+  /// Citrus. Runs once per database (a restored backup may need it again).
   String? _savedTheme() {
     final saved = store.setting('theme');
-    if (saved == null || store.setting('themeNames') == '2') return saved;
-    final name = switch (saved) {
-      'Main' => 'Solar Eclipse',
-      'Dark' || 'Eclipse' => 'Lunar Eclipse',
-      'Soft Pastel' => 'Pastel',
-      'Sage & Sunset' => 'Citrus',
-      'Sunset' => 'Sunrise',
+    final version = int.tryParse(store.setting('themeNames') ?? '') ?? 1;
+    if (saved == null || version >= _themeNames) return saved;
+    var name = version >= 2
+        ? saved
+        : switch (saved) {
+            'Main' => 'Solar Eclipse',
+            'Dark' || 'Eclipse' => 'Lunar Eclipse',
+            'Soft Pastel' => 'Pastel',
+            'Sage & Sunset' => 'Citrus',
+            'Sunset' => 'Sunrise',
+            final name => name,
+          };
+    name = switch (name) {
+      'Citrus' => 'Solar Eclipse',
+      'Dark Citrus' => 'Lunar Eclipse',
       final name => name,
     };
     store.setSetting('theme', name);
-    store.setSetting('themeNames', '2');
+    store.setSetting('themeNames', '$_themeNames');
     return name;
   }
+
+  static const _themeNames = 3;
 
   void setTheme(String name) {
     themeName = name;
     themeNotifier.value = name;
     store.setSetting('theme', name);
-    store.setSetting('themeNames', '2');
+    store.setSetting('themeNames', '$_themeNames');
     notifyListeners();
   }
 
