@@ -30,9 +30,11 @@ linux/install.sh
 
 This builds the app and adds **Eclipse** to your app launcher, with its icon.
 
-**Updating:** there is no automatic update on Linux. The app is built from
-this folder, so after new code lands here, run `linux/install.sh` again and
-then quit and reopen Eclipse.
+**Updating:** the app remembers which commit of this folder it was built
+from. When the folder has newer commits, a card in the bottom-right corner
+offers **Update and reopen**, which runs `linux/install.sh` again and
+restarts Eclipse. It checks on launch and every two minutes, and only looks at
+this folder: pull first if the new code is on GitHub.
 
 ## Building from source
 

@@ -4,39 +4,54 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../data/backups.dart';
+import '../data/updates.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/backups_dialog.dart';
 import '../widgets/fade_through.dart';
+import '../widgets/update_banner.dart';
 import 'month_view.dart';
 import 'today_view.dart';
 
 /// Window chrome: title, year switcher and month tabs.
 class Shell extends StatelessWidget {
-  const Shell({super.key});
+  const Shell({super.key, this.updater});
+
+  /// Null when the app can't update itself (not installed by linux/install.sh).
+  final Updater? updater;
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final month = state.viewMonth;
 
-    return Scaffold(
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _Header(),
-          Expanded(
-            // Months share one MonthView, which fades only its grid, so the
-            // card stays put when you move between months.
-            child: FadeThrough(
-              layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
-              child: month == null
-                  ? const TodayView(key: ValueKey('today'))
-                  : MonthView(key: const ValueKey('month'), year: state.viewYear, month: month),
-            ),
+    final updater = this.updater;
+    final page = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _Header(),
+        Expanded(
+          // Months share one MonthView, whose grid morphs in place, so the
+          // card stays put when you move between months.
+          child: FadeThrough(
+            layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
+            child: month == null
+                ? const TodayView(key: ValueKey('today'))
+                : MonthView(key: const ValueKey('month'), year: state.viewYear, month: month),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+
+    return Scaffold(
+      body: updater == null
+          ? page
+          : Stack(
+              children: [
+                Positioned.fill(child: page),
+                Positioned(right: 32, bottom: 28, child: UpdateBanner(updater: updater)),
+              ],
+            ),
     );
   }
 }
@@ -220,11 +235,7 @@ class _TabBarState extends State<_TabBar> {
                 borderRadius: BorderRadius.circular(30),
                 gradient: LinearGradient(colors: p.gradient),
                 boxShadow: [
-                  BoxShadow(
-                    color: p.gradient[1].withValues(alpha: 0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
+                  BoxShadow(color: p.gradient[1].withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3)),
                 ],
               ),
             ),

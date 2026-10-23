@@ -11,6 +11,7 @@ import 'package:eclipse/app_state.dart';
 import 'package:eclipse/data/backups.dart';
 import 'package:eclipse/data/journal_files.dart';
 import 'package:eclipse/data/store.dart';
+import 'package:eclipse/data/updates.dart';
 import 'package:eclipse/main.dart';
 import 'package:eclipse/models.dart';
 import 'package:eclipse/theme/app_theme.dart';
@@ -126,6 +127,57 @@ void main() {
       state.setJournal(day, '  ');
       expect(file.existsSync(), isFalse, reason: 'an emptied entry leaves no file');
       store.close();
+    });
+  });
+
+  group('updates', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('productivity_updates'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    String git(List<String> args) {
+      final r = Process.runSync('git', [
+        '-C', dir.path, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args, //
+      ]);
+      expect(r.exitCode, 0, reason: '${r.stderr}');
+      return (r.stdout as String).trim();
+    }
+
+    test('offers newer commits from the folder the app was built from', () async {
+      git(['init', '-q']);
+      Directory('${dir.path}/linux').createSync();
+      File('${dir.path}/linux/install.sh').writeAsStringSync('echo "Building"\necho "Error: no space left" >&2\nexit 1\n');
+      git(['add', '-A']);
+      git(['commit', '-qm', 'First']);
+      final built = git(['rev-parse', 'HEAD']);
+
+      final app = Directory('${dir.path}/installed')..createSync();
+      expect(Updater.forExecutable('${app.path}/eclipse'), isNull, reason: 'no build-info: not installed by the script');
+      File('${app.path}/build-info').writeAsStringSync('repo=${dir.path}\ncommit=$built\n');
+      final updater = Updater.forExecutable('${app.path}/eclipse')!;
+
+      await updater.check();
+      expect(updater.status, UpdateStatus.none, reason: 'up to date');
+
+      git(['commit', '-q', '--allow-empty', '-m', 'Second']);
+      git(['commit', '-q', '--allow-empty', '-m', 'Add an update banner']);
+      await updater.check();
+      expect(updater.status, UpdateStatus.available);
+      expect(updater.newCommits, 2);
+      expect(updater.latest, 'Add an update banner');
+
+      updater.dismiss();
+      await updater.check();
+      expect(updater.status, UpdateStatus.none, reason: 'Later hides it until there is something newer');
+      git(['commit', '-q', '--allow-empty', '-m', 'Third']);
+      await updater.check();
+      expect(updater.status, UpdateStatus.available);
+
+      await updater.update();
+      expect(updater.status, UpdateStatus.failed);
+      expect(updater.error, 'Error: no space left');
+      await updater.check();
+      expect(updater.status, UpdateStatus.failed, reason: 'the error stays until there is something new');
     });
   });
 
@@ -486,6 +538,48 @@ void main() {
     await tester.pumpAndSettle();
     await _shoot(tester, 'row_hover');
     await gesture.removePointer();
+  });
+
+  testWidgets('update banner', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final updater = Updater(repo: '/nowhere', installedCommit: 'abc', executable: '/nowhere/eclipse');
+    await tester.pumpWidget(EclipseApp(state: state, updater: updater));
+    await tester.pumpAndSettle();
+    expect(find.text('A new version is ready'), findsOneWidget, reason: 'built but hidden');
+    expect(tester.widget<AnimatedOpacity>(find.ancestor(
+      of: find.text('A new version is ready'),
+      matching: find.byType(AnimatedOpacity),
+    ).first).opacity, 0);
+
+    updater
+      ..newCommits = 3
+      ..latest = 'Smooth every view switch, morph months, and save the journal as files'
+      ..status = UpdateStatus.available
+      ..notifyListeners();
+    await tester.pumpAndSettle();
+    await _shoot(tester, 'update_available');
+
+    updater
+      ..status = UpdateStatus.updating
+      ..notifyListeners();
+    await tester.pump(const Duration(milliseconds: 600));
+    await _shoot(tester, 'update_updating');
+
+    updater
+      ..error = 'Error: lib/main.dart:12:3: Expected a semicolon'
+      ..status = UpdateStatus.failed
+      ..notifyListeners();
+    await tester.pump(const Duration(milliseconds: 600));
+    await _shoot(tester, 'update_failed');
+
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+    expect(updater.status, UpdateStatus.none);
   });
 
   testWidgets('theme switcher, and every theme renders', (tester) async {

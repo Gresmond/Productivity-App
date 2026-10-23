@@ -12,11 +12,17 @@ prefix="${XDG_DATA_HOME:-$HOME/.local/share}"
 dest="$HOME/.local/opt/eclipse"
 
 flutter="$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")"
+# Taken before building, so a commit made mid-build still counts as new.
+commit="$(git rev-parse HEAD 2>/dev/null || true)"
 "$flutter" build linux --release
 
 rm -rf "$dest"
 mkdir -p "$dest"
 cp -R build/linux/x64/release/bundle/. "$dest/"
+
+# Lets the app notice when this folder has newer commits than it was
+# built from, and offer to run this script again.
+printf 'repo=%s\ncommit=%s\n' "$PWD" "$commit" > "$dest/build-info"
 
 install -Dm644 design/icon/eclipse.svg "$prefix/icons/hicolor/scalable/apps/$app_id.svg"
 

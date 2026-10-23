@@ -9,6 +9,7 @@ import 'app_state.dart';
 import 'data/backups.dart';
 import 'data/journal_files.dart';
 import 'data/store.dart';
+import 'data/updates.dart';
 import 'screens/shell.dart';
 import 'theme/app_theme.dart';
 
@@ -28,13 +29,21 @@ Future<void> main() async {
   // Picks up midnight (and waking from sleep) to roll the day over.
   Timer.periodic(const Duration(minutes: 1), (_) => state.checkDate());
 
-  runApp(EclipseApp(state: state));
+  // Only when installed by linux/install.sh: watches its folder for newer commits.
+  final updater = Updater.forExecutable(Platform.resolvedExecutable, onRestart: () async => state.store.close());
+  if (updater != null) {
+    unawaited(updater.check());
+    Timer.periodic(const Duration(minutes: 2), (_) => updater.check());
+  }
+
+  runApp(EclipseApp(state: state, updater: updater));
 }
 
 class EclipseApp extends StatelessWidget {
-  const EclipseApp({super.key, required this.state});
+  const EclipseApp({super.key, required this.state, this.updater});
 
   final AppState state;
+  final Updater? updater;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +57,7 @@ class EclipseApp extends StatelessWidget {
           theme: themeNamed(themeName),
           themeAnimationDuration: const Duration(milliseconds: 350),
           themeAnimationCurve: Curves.easeOutCubic,
-          home: const Shell(),
+          home: Shell(updater: updater),
         ),
       ),
     );
