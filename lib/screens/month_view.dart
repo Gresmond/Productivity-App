@@ -132,9 +132,16 @@ class _Grid extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final col = ((constraints.maxWidth - nameWidth) / days.length).clamp(20.0, 40.0);
+        final totalDays = days.length;
+        const minCol = 22.0;
+        final minGridWidth = nameWidth + totalDays * minCol;
+        final needsScroll = constraints.maxWidth < minGridWidth;
+
+        final availableWidth = needsScroll ? minGridWidth : constraints.maxWidth;
+        final col = ((availableWidth - nameWidth) / totalDays).clamp(20.0, 40.0);
         final cell = col - 6;
-        return Column(
+
+        Widget grid = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -197,6 +204,18 @@ class _Grid extends StatelessWidget {
             ),
           ],
         );
+
+        if (needsScroll) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: minGridWidth,
+              child: grid,
+            ),
+          );
+        }
+
+        return grid;
       },
     );
   }

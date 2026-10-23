@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
@@ -63,7 +65,8 @@ class _Header extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 26, 32, 22),
+      // On macOS the window buttons float over the top of the content.
+      padding: EdgeInsets.fromLTRB(32, Platform.isMacOS ? 38 : 26, 32, 22),
       child: Row(
         children: [
           // Sized to the widest possible title, so the tab bar beside it
