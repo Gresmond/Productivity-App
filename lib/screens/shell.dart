@@ -451,18 +451,29 @@ class _BackupsButton extends StatelessWidget {
 
 /// Round swatch of the current theme; opens a menu of all themes, the
 /// rest-weekends switch and when a new day starts.
-class _ThemeButton extends StatelessWidget {
+class _ThemeButton extends StatefulWidget {
   const _ThemeButton();
 
+  @override
+  State<_ThemeButton> createState() => _ThemeButtonState();
+}
+
+class _ThemeButtonState extends State<_ThemeButton> {
   /// Menu values of the switches; the others are theme names.
   static const _restWeekends = '#restWeekends';
   static const _followNightLight = '#followNightLight';
+
+  final _menu = GlobalKey<PopupMenuButtonState<String>>();
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
+    // Disabled so its own InkWell draws no square hover; the swatch opens
+    // the menu itself.
     return PopupMenuButton<String>(
+      key: _menu,
+      enabled: false,
       tooltip: 'Appearance',
       offset: const Offset(0, 54),
       color: p.tile,
@@ -534,21 +545,27 @@ class _ThemeButton extends StatelessWidget {
         const PopupMenuDivider(),
         const _DayStartEntry(),
       ],
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: p.tile.withValues(alpha: 0.8),
-          shape: BoxShape.circle,
-          border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
-          boxShadow: [
-            BoxShadow(
-              color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => _menu.currentState?.showButtonMenu(),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: p.tile.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+              border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
+              boxShadow: [
+                BoxShadow(
+                  color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
+            child: _Swatch(palette: p, size: 36),
+          ),
         ),
-        child: _Swatch(palette: p, size: 36),
       ),
     );
   }
