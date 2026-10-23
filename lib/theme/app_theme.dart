@@ -154,25 +154,31 @@ final eveningPastelPalette = const PaletteRecipe(
 final sunrisePalette = const PaletteRecipe(
   name: 'Sunrise',
   brightness: Brightness.light,
-  // Peach.
-  neutralHue: 55,
+  // Blush.
+  neutralHue: 15,
   neutralChroma: 0.02,
-  keyHue: 45,
-  statusChroma: 0.15,
+  // A fire sky, soft: apricot, coral-pink and orchid.
+  keyHue: 55,
+  statusChroma: 0.10,
   statusLightness: 0.58,
-  harmony: Harmony.analogous,
+  harmony: Harmony.sky,
+  vivid: true,
+  softness: 0.5,
 ).build();
 
 final sunsetPalette = const PaletteRecipe(
   name: 'Sunset',
   brightness: Brightness.dark,
-  // Embers.
-  neutralHue: 25,
-  neutralChroma: 0.035,
-  keyHue: 45,
-  statusChroma: 0.15,
+  // Dark wine.
+  neutralHue: 350,
+  neutralChroma: 0.04,
+  // A fire sky, soft: apricot, coral-pink and orchid.
+  keyHue: 55,
+  statusChroma: 0.10,
   statusLightness: 0.58,
-  harmony: Harmony.analogous,
+  harmony: Harmony.sky,
+  vivid: true,
+  softness: 0.5,
 ).build();
 
 /// Each light theme and its dark partner, in menu order.

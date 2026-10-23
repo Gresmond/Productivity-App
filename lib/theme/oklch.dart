@@ -24,6 +24,27 @@ class Oklch {
     return _encode(_linear(l, lo, h));
   }
 
+  /// The most chroma sRGB can show at lightness [l] and hue [h].
+  static double maxChroma(double l, double h) {
+    var lo = 0.0, hi = 0.5;
+    for (var i = 0; i < 24; i++) {
+      final mid = (lo + hi) / 2;
+      _inGamut(_linear(l, mid, h)) ? lo = mid : hi = mid;
+    }
+    return lo;
+  }
+
+  /// Hue [h] at its most vivid: the lightness where sRGB shows it with the
+  /// most chroma. Yellow peaks bright, blue and purple deep.
+  static Oklch cusp(double h) {
+    var best = Oklch(0.5, 0, h);
+    for (var l = 0.2; l < 0.99; l += 0.005) {
+      final c = maxChroma(l, h);
+      if (c > best.c) best = Oklch(l, c, h);
+    }
+    return best;
+  }
+
   static Oklch of(Color color) {
     final (r, g, b) = (_toLinear(color.r), _toLinear(color.g), _toLinear(color.b));
     final lab = _labFromLinear(r, g, b);

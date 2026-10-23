@@ -12,7 +12,11 @@ enum Harmony {
   splitComplementary(150, 210),
 
   /// Three hues 120° apart: the most separation.
-  triadic(120, 240);
+  triadic(120, 240),
+
+  /// Neighbours along a fifth of the wheel, in the order a sky fades at
+  /// dusk: orange, then crimson, then magenta.
+  sky(-40, -75);
 
   const Harmony(this.first, this.second);
 
@@ -42,6 +46,8 @@ class PaletteRecipe {
     required this.statusLightness,
     this.harmony = Harmony.splitComplementary,
     this.lightnessSpread = 0.12,
+    this.vivid = false,
+    this.softness = 0,
   });
 
   final String name;
@@ -50,6 +56,17 @@ class PaletteRecipe {
   final double keyHue, statusChroma, statusLightness;
   final Harmony harmony;
   final double lightnessSpread;
+
+  /// Each status at its hue's cusp (see [Oklch.cusp]) with 85% of the
+  /// chroma it can have there, instead of one shared lightness and chroma.
+  /// Warm hues at a shared mid lightness turn brown (orange) and olive
+  /// (yellow); at their cusps they stay as bright as a sky. All three are
+  /// still equally vivid, relative to what each hue can reach.
+  final bool vivid;
+
+  /// How far a [vivid] theme's statuses move from their cusps toward
+  /// pastel, 0-1: lighter, and with less of the chroma they could have.
+  final double softness;
 
   PaletteRecipe withHarmony(Harmony harmony) => PaletteRecipe(
         name: name,
@@ -61,6 +78,8 @@ class PaletteRecipe {
         statusLightness: statusLightness,
         harmony: harmony,
         lightnessSpread: lightnessSpread,
+        vivid: vivid,
+        softness: softness,
       );
 
   bool get _dark => brightness == Brightness.dark;
@@ -76,8 +95,15 @@ class PaletteRecipe {
 
   Palette build() {
     final (doneHue, missedHue, otherHue) = statusHues;
-    Color status(double hue, double step) =>
-        Oklch(statusLightness + step * lightnessSpread / 2, statusChroma, hue).toColor();
+    Color status(double hue, double step) {
+      if (!vivid) return Oklch(statusLightness + step * lightnessSpread / 2, statusChroma, hue).toColor();
+      final cusp = Oklch.cusp(hue);
+      // Softening pulls the cusps together, so the lightness step still
+      // applies.
+      final l = cusp.l + (0.88 - cusp.l) * softness + step * lightnessSpread / 2;
+      return Oklch(l, Oklch.maxChroma(l, hue) * 0.85 * (1 - 0.5 * softness), hue).toColor();
+    }
+
     final done = status(doneHue, 1), missed = status(missedHue, -1), other = status(otherHue, 0);
 
     final ink = _neutral(_dark ? 0.955 : 0.24, 2);
@@ -91,6 +117,17 @@ class PaletteRecipe {
         ? Oklch(onAccent == white ? 0.50 : 0.84, statusChroma, keyHue).toColor()
         : Oklch(0.89, statusChroma * 0.5, keyHue).toColor();
     final darkInk = _neutral(0.22, 2);
+    // A vivid theme's accent takes whichever status hue keeps the most
+    // chroma at the accent's lightness, so dark gold text never turns brown.
+    final accentL = _dark ? 0.80 : 0.50;
+    final accentHue = !vivid
+        ? keyHue
+        : ([doneHue, missedHue, otherHue]..sort((a, b) =>
+                Oklch.maxChroma(accentL, b).compareTo(Oklch.maxChroma(accentL, a))))
+            .first;
+    final accentC = vivid
+        ? Oklch.maxChroma(accentL, accentHue) * 0.85
+        : statusChroma * (_dark ? 0.8 : 1);
     final onToday = contrast(white, today) >= contrast(darkInk, today) ? white : darkInk;
 
     return Palette(
@@ -101,9 +138,10 @@ class PaletteRecipe {
       tileBorder: _neutral(_dark ? 0.285 : 0.905),
       ink: ink,
       inkMuted: _neutral(_dark ? 0.73 : 0.52, 2),
-      accent: Oklch(_dark ? 0.80 : 0.50, statusChroma * (_dark ? 0.8 : 1), keyHue).toColor(),
+      accent: Oklch(accentL, accentC, accentHue).toColor(),
       onAccent: onAccent,
-      gradient: [done, other, missed].map((c) {
+      // A vivid theme's gradient runs in sky order.
+      gradient: (vivid ? [done, missed, other] : [done, other, missed]).map((c) {
         final o = Oklch.of(c);
         return Oklch(o.l, o.c * 1.1, o.h).toColor();
       }).toList(),
