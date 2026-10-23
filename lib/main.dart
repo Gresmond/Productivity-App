@@ -25,11 +25,11 @@ Future<void> main() async {
   // Picks up midnight (and waking from sleep) to roll the day over.
   Timer.periodic(const Duration(minutes: 1), (_) => state.checkDate());
 
-  runApp(ProductivityApp(state: state));
+  runApp(EclipseApp(state: state));
 }
 
-class ProductivityApp extends StatelessWidget {
-  const ProductivityApp({super.key, required this.state});
+class EclipseApp extends StatelessWidget {
+  const EclipseApp({super.key, required this.state});
 
   final AppState state;
 
@@ -40,7 +40,7 @@ class ProductivityApp extends StatelessWidget {
       child: ValueListenableBuilder<String?>(
         valueListenable: state.themeNotifier,
         builder: (context, themeName, _) => MaterialApp(
-          title: 'Productivity',
+          title: 'Eclipse',
           debugShowCheckedModeBanner: false,
           theme: themeNamed(themeName),
           themeAnimationDuration: const Duration(milliseconds: 350),

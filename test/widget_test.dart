@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:productivity_app/app_state.dart';
-import 'package:productivity_app/data/backups.dart';
-import 'package:productivity_app/data/store.dart';
-import 'package:productivity_app/main.dart';
-import 'package:productivity_app/models.dart';
-import 'package:productivity_app/theme/app_theme.dart';
+import 'package:eclipse/app_state.dart';
+import 'package:eclipse/data/backups.dart';
+import 'package:eclipse/data/store.dart';
+import 'package:eclipse/main.dart';
+import 'package:eclipse/models.dart';
+import 'package:eclipse/theme/app_theme.dart';
 
 /// Pass --dart-define=SCREENSHOT_DIR=/some/dir to save PNGs of each view.
 const _shotDir = String.fromEnvironment('SCREENSHOT_DIR');
@@ -286,7 +286,7 @@ void main() {
     state.cycle(now, weights);
     state.setJournal(now, 'Written after the backup');
 
-    await tester.pumpWidget(ProductivityApp(state: state));
+    await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Backups'));
     await tester.pumpAndSettle();
@@ -319,7 +319,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
-    await tester.pumpWidget(ProductivityApp(state: state));
+    await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
     expect(find.text('Daily rituals'), findsOneWidget);
@@ -357,7 +357,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
-    await tester.pumpWidget(ProductivityApp(state: state));
+    await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
     // How visible a widget is, through every fade above it.
@@ -412,7 +412,7 @@ void main() {
     state.addTodo(TodoScope.week, 'Book dentist');
     state.addTodo(TodoScope.month, 'Renew passport');
 
-    await tester.pumpWidget(ProductivityApp(state: state));
+    await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Theme'));

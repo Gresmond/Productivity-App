@@ -4,9 +4,11 @@ project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "productivity_app")
+set(BINARY_NAME "eclipse")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
+# It predates the Eclipse name and stays as it is: the data folder
+# (~/.local/share/<id>) is named after it.
 set(APPLICATION_ID "dev.nicholas.productivity_app")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
