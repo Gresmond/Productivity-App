@@ -44,6 +44,21 @@ class TodoItem {
 
 DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+/// The day [now] counts towards when each day starts at [startHour] o'clock:
+/// before then, it's still the day before. Works in calendar days, so a
+/// clock change doesn't shift it.
+DateTime dayOf(DateTime now, int startHour) =>
+    DateTime(now.year, now.month, now.day - (now.hour < startHour ? 1 : 0));
+
+/// When the day after the one [now] counts towards begins.
+DateTime nextDayStart(DateTime now, int startHour) {
+  final day = dayOf(now, startHour);
+  return DateTime(day.year, day.month, day.day + 1, startHour);
+}
+
+/// 'Midnight', '4am'.
+String hourLabel(int hour) => hour == 0 ? 'Midnight' : '${hour}am';
+
 String dateKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 

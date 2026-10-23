@@ -226,6 +226,60 @@ void main() {
     });
   });
 
+  group('day start', () {
+    test('a day can run on past midnight', () {
+      expect(dayOf(DateTime(2026, 10, 24, 1, 30), 4), DateTime(2026, 10, 23));
+      expect(dayOf(DateTime(2026, 10, 24, 4), 4), DateTime(2026, 10, 24));
+      expect(dayOf(DateTime(2026, 10, 24, 1, 30), 0), DateTime(2026, 10, 24));
+      expect(dayOf(DateTime(2026, 11, 1, 2), 3), DateTime(2026, 10, 31), reason: 'across a month');
+      expect(nextDayStart(DateTime(2026, 10, 24, 1, 30), 4), DateTime(2026, 10, 24, 4));
+      expect(nextDayStart(DateTime(2026, 10, 24, 22), 4), DateTime(2026, 10, 25, 4));
+      expect(nextDayStart(DateTime(2026, 10, 24, 22), 0), DateTime(2026, 10, 25));
+    });
+
+    test('late-night ticks count for the day before', () {
+      final store = Store.memory();
+      var now = DateTime(2026, 10, 23, 23); // Friday night
+      var state = AppState(store, clock: () => now);
+      state.setDayStartHour(4);
+      state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
+      state.addTodo(TodoScope.today, 'Unfinished');
+
+      now = DateTime(2026, 10, 24, 1, 30);
+      state.checkDate();
+      expect(state.today, DateTime(2026, 10, 23));
+      expect(state.lateNight, isTrue);
+      final journal = state.habits.firstWhere((h) => h.name == 'Journal');
+      state.cycle(state.today, journal);
+      expect(state.statusOf(DateTime(2026, 10, 23), journal), HabitStatus.done);
+      expect(state.todos[TodoScope.today]!.single.carried, 0, reason: 'still Friday');
+
+      now = DateTime(2026, 10, 24, 4, 0, 1);
+      state.checkDate();
+      expect(state.today, DateTime(2026, 10, 24));
+      expect(state.lateNight, isFalse);
+      expect(state.todos[TodoScope.today]!.single.carried, 1);
+
+      state = AppState(store, clock: () => now);
+      expect(state.dayStartHour, 4, reason: 'remembered');
+    });
+
+    test('changing it after midnight moves today back, losing nothing', () {
+      var now = DateTime(2026, 10, 24, 1); // Saturday, 1am, days start at midnight
+      final state = AppState(Store.memory(), clock: () => now);
+      state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
+      state.addTodo(TodoScope.today, 'Added just after midnight');
+
+      state.setDayStartHour(4);
+      expect(state.today, DateTime(2026, 10, 23));
+      expect(state.todos[TodoScope.today]!.map((t) => t.text), ['Added just after midnight']);
+
+      state.setDayStartHour(0);
+      expect(state.today, DateTime(2026, 10, 24));
+      expect(state.lateNight, isFalse);
+    });
+  });
+
   group('streaks', () {
     // Clocks went forward on 4 October 2026 in Adelaide, making it 23 hours
     // long. Run with TZ=Australia/Adelaide to check stepping over it.
@@ -514,6 +568,33 @@ void main() {
     expect(tablets.size.height, greaterThan(weights.size.height * 1.5));
     expect(find.text('Rest day. Nothing you have to do.'), findsOneWidget);
     await _shoot(tester, 'today_narrow_weekend');
+  });
+
+  testWidgets('choosing when the day starts, and the header after midnight', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24, 1, 30));
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+    expect(find.text('SATURDAY'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Appearance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('4am'));
+    await tester.pumpAndSettle();
+    expect(state.dayStartHour, 4);
+    expect(find.text('New day starts at'), findsOneWidget, reason: 'the menu stays open');
+    await _shoot(tester, 'day_start_menu');
+
+    await tester.tapAt(const Offset(200, 600)); // closes the menu
+    await tester.pumpAndSettle();
+    expect(state.today, DateTime(2026, 10, 23));
+    expect(find.text('SATURDAY'), findsNothing);
+    expect(find.text('FRIDAY  ·  UNTIL 4AM'), findsOneWidget);
+    await _shoot(tester, 'day_start_header');
   });
 
   testWidgets('switching views and months never shows two at once', (tester) async {

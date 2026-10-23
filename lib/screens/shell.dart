@@ -67,8 +67,11 @@ class _Header extends StatelessWidget {
     final month = state.viewMonth;
 
     final todayTitle = '${today.day} ${monthNames[today.month - 1]}';
+    // After midnight but before the day starts, say so: the date shown is
+    // the day you're still finishing.
+    final weekday = weekdayNames[today.weekday - 1];
     final (String kicker, String title) = month == null
-        ? (weekdayNames[today.weekday - 1], todayTitle)
+        ? (state.lateNight ? '$weekday  ·  until ${hourLabel(state.dayStartHour)}' : weekday, todayTitle)
         : ('${state.viewYear}', monthNames[month - 1]);
     final titleStyle = TextStyle(
       fontFamily: Fonts.display,
@@ -446,8 +449,8 @@ class _BackupsButton extends StatelessWidget {
   }
 }
 
-/// Round swatch of the current theme; opens a menu of all themes, and the
-/// rest-weekends switch.
+/// Round swatch of the current theme; opens a menu of all themes, the
+/// rest-weekends switch and when a new day starts.
 class _ThemeButton extends StatelessWidget {
   const _ThemeButton();
 
@@ -533,6 +536,8 @@ class _ThemeButton extends StatelessWidget {
             ],
           ),
         ),
+        const PopupMenuDivider(),
+        const _DayStartEntry(),
       ],
       child: Container(
         padding: const EdgeInsets.all(4),
@@ -549,6 +554,91 @@ class _ThemeButton extends StatelessWidget {
           ],
         ),
         child: _Swatch(palette: p, size: 36),
+      ),
+    );
+  }
+}
+
+/// Picks the hour a new day starts. Stays open while you choose, since
+/// picking just moves the highlight.
+class _DayStartEntry extends PopupMenuEntry<String> {
+  const _DayStartEntry();
+
+  static const hours = [0, 2, 3, 4, 5];
+
+  @override
+  double get height => 96;
+
+  @override
+  bool represents(String? value) => false;
+
+  @override
+  State<_DayStartEntry> createState() => _DayStartEntryState();
+}
+
+class _DayStartEntryState extends State<_DayStartEntry> {
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final state = AppScope.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'New day starts at',
+            style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Before then, ticks count for the day before.',
+            style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.inkMuted),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: p.empty.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                for (final hour in _DayStartEntry.hours)
+                  Expanded(
+                    flex: hour == 0 ? 7 : 4,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => state.setDayStartHour(hour),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(17),
+                            gradient: hour == state.dayStartHour
+                                ? LinearGradient(colors: p.gradient.take(2).toList())
+                                : LinearGradient(colors: [for (final c in p.gradient.take(2)) c.withValues(alpha: 0)]),
+                          ),
+                          child: Text(
+                            hourLabel(hour),
+                            style: TextStyle(
+                              fontFamily: Fonts.ui,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: hour == state.dayStartHour ? p.onAccent : p.inkMuted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

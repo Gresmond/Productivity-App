@@ -9,7 +9,8 @@ import 'models.dart';
 /// lists in memory and writes every change straight to SQLite.
 class AppState extends ChangeNotifier {
   AppState(this.store, {this.backups, this.journalFiles, DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
-    today = dateOnly(_clock());
+    today = dayOf(_clock(), dayStartHour);
+    lateNight = dateOnly(_clock()) != today;
     viewYear = today.year;
     if (store.isEmpty) _seed();
     _backUp();
@@ -27,7 +28,22 @@ class AppState extends ChangeNotifier {
   final JournalFiles? journalFiles;
   final DateTime Function() _clock;
 
+  /// The day ticks, to-dos and the journal count towards: the calendar
+  /// date, except before [dayStartHour], when it's still the day before.
   late DateTime today;
+
+  /// Past midnight but before [dayStartHour], so [today] is yesterday's date.
+  late bool lateNight;
+
+  /// The hour a new day starts: 0 for midnight, up to 6 for night owls.
+  late int dayStartHour = int.tryParse(store.setting('dayStartHour') ?? '') ?? 0;
+
+  void setDayStartHour(int hour) {
+    dayStartHour = hour;
+    store.setSetting('dayStartHour', '$hour');
+    checkDate();
+    notifyListeners();
+  }
 
   late int viewYear;
 
@@ -77,8 +93,17 @@ class AppState extends ChangeNotifier {
   /// Call periodically: when the date has changed, carries unfinished to-dos
   /// into the new day/week/month.
   void checkDate() {
-    final now = dateOnly(_clock());
-    if (now == today) return;
+    final clock = _clock();
+    final now = dayOf(clock, dayStartHour);
+    final late = dateOnly(clock) != now;
+    if (now == today) {
+      if (late != lateNight) {
+        lateNight = late;
+        notifyListeners();
+      }
+      return;
+    }
+    lateNight = late;
     if (viewYear == today.year) viewYear = now.year;
     today = now;
     _streaks.clear();
@@ -110,6 +135,7 @@ class AppState extends ChangeNotifier {
     themeName = _savedTheme();
     themeNotifier.value = themeName;
     restWeekends = store.setting('restWeekends') == '1';
+    dayStartHour = int.tryParse(store.setting('dayStartHour') ?? '') ?? 0;
     _streaks.clear();
     _startDay();
   }
@@ -124,6 +150,7 @@ class AppState extends ChangeNotifier {
     await backups!.restore(store, backup);
     restores++;
     _load();
+    checkDate(); // the backup may start its days at another hour
     notifyListeners();
   }
 

@@ -11,6 +11,7 @@ import 'data/journal_files.dart';
 import 'data/store.dart';
 import 'data/system_time_zone.dart';
 import 'data/updates.dart';
+import 'models.dart';
 import 'screens/shell.dart';
 import 'theme/app_theme.dart';
 
@@ -40,7 +41,8 @@ Future<void> main() async {
   runApp(EclipseApp(state: state, updater: updater));
 }
 
-/// Rolls the day over on the stroke of midnight. Also looks once a minute,
+/// Rolls the day over on the stroke of midnight (or whenever the user's day
+/// starts). Also looks once a minute,
 /// because timers stand still while the computer sleeps and the time zone
 /// can change, and whenever the window comes back.
 void _watchDate(AppState state) {
@@ -51,11 +53,13 @@ void _watchDate(AppState state) {
 
   void schedule() {
     final now = DateTime.now();
-    final untilMidnight = DateTime(now.year, now.month, now.day + 1).difference(now);
-    // Just past midnight, so the clock has certainly turned.
-    final wait = untilMidnight < const Duration(minutes: 1)
-        ? untilMidnight + const Duration(milliseconds: 20)
-        : const Duration(minutes: 1);
+    // Midnight is looked at too, for the "until 4am" in the header.
+    final until = [
+      DateTime(now.year, now.month, now.day + 1),
+      nextDayStart(now, state.dayStartHour),
+    ].map((t) => t.difference(now)).reduce((a, b) => a < b ? a : b);
+    // Just past the hour, so the clock has certainly turned.
+    final wait = until < const Duration(minutes: 1) ? until + const Duration(milliseconds: 20) : const Duration(minutes: 1);
     Timer(wait, () {
       check();
       schedule();
