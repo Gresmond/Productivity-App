@@ -126,7 +126,13 @@ class Updater extends ChangeNotifier {
 
     _set(UpdateStatus.restarting);
     await onRestart?.call();
-    await Process.start(executable, const [], mode: ProcessStartMode.detached);
+    // Only one copy runs at a time, and a second one just hands over to the
+    // first, so the new copy waits for this one to exit.
+    await Process.start('sh', [
+      '-c',
+      'while kill -0 $pid 2>/dev/null; do sleep 0.1; done; exec "\$0"',
+      executable,
+    ], mode: ProcessStartMode.detached);
     exit(0);
   }
 

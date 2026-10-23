@@ -540,6 +540,34 @@ void main() {
     await gesture.removePointer();
   });
 
+  testWidgets('a ticked to-do glides up to the top', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    for (final t in [...state.todos[TodoScope.week]!]) {
+      state.removeTodo(TodoScope.week, t);
+    }
+    for (final t in ['Alpha', 'Bravo', 'Charlie']) {
+      state.addTodo(TodoScope.week, t);
+    }
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+    final (alpha, charlie) = (top('Alpha'), top('Charlie'));
+
+    await tester.tap(find.text('Charlie'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(top('Charlie'), allOf(lessThan(charlie), greaterThan(alpha)), reason: 'still on its way up');
+
+    await tester.pumpAndSettle();
+    expect(top('Charlie'), moreOrLessEquals(alpha));
+    expect(top('Alpha'), greaterThan(top('Charlie')));
+  });
+
   testWidgets('Enter saves a note', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;

@@ -10,20 +10,47 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  // The one window, kept (just hidden) when it's closed.
+  GtkWindow* window;
+  // Started with --background (at login): run, but don't show the window
+  // until the app is opened.
+  gboolean background;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
+  if (self->background) return;
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
-// Implements GApplication::activate.
+// Closing the window only hides it, so the app keeps running (and keeps
+// checking for updates) and opens again instantly.
+static gboolean delete_event_cb(GtkWidget* window, GdkEvent* event,
+                                gpointer user_data) {
+  gtk_widget_hide(window);
+  return TRUE;
+}
+
+// Implements GApplication::activate. Opening the app again while it runs
+// lands here in the running copy.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  if (self->window != nullptr) {
+    self->background = FALSE;
+    // Showing a hidden window maps it afresh, so window rules (such as
+    // sending it to the scratchpad) apply each time it opens.
+    gtk_widget_show(GTK_WIDGET(self->window));
+    gtk_window_present(self->window);
+    return;
+  }
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
+  self->window = window;
+  g_signal_connect(window, "delete-event", G_CALLBACK(delete_event_cb),
+                   nullptr);
 
   // No title bar: the app's own header is the top of the window. The title
   // still names the window in task switchers and window lists.
@@ -69,6 +96,8 @@ static gboolean my_application_local_command_line(GApplication* application,
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
+  self->background =
+      g_strv_contains((const gchar* const*)*arguments, "--background");
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {
@@ -128,5 +157,5 @@ MyApplication* my_application_new() {
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     G_APPLICATION_DEFAULT_FLAGS, nullptr));
 }
