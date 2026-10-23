@@ -923,8 +923,6 @@ class _DayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final weekend = day.weekday >= DateTime.saturday;
-    final letterFg = rest ? p.inkMuted.withValues(alpha: 0.6) : (weekend ? p.other : p.inkMuted);
-    final numberFg = rest ? p.inkMuted.withValues(alpha: 0.75) : p.ink;
     final letter = weekdayNames[day.weekday - 1][0];
     // Fills its column (less a small gap), so it follows the column's
     // width through a morph without being rebuilt.
@@ -934,69 +932,78 @@ class _DayHeader extends StatelessWidget {
         child: RepaintBoundary(
           // Each column keeps its day number from month to month; only the
           // weekday letter and the today marker change, and both ease.
-          // Only whether this is today is animated; the colours are read
-          // from the palette every frame, so they follow a theme
-          // cross-fade exactly instead of trailing it.
+          // Only whether this is today, and whether it's a rest day, are
+          // animated; the colours are read from the palette every frame, so
+          // they follow a theme cross-fade exactly instead of trailing it.
           child: TweenAnimationBuilder<double>(
-            tween: Tween(end: isToday ? 1 : 0),
+            tween: Tween(end: rest ? 1 : 0),
             duration: _morph,
             curve: Curves.easeInOutCubic,
-            builder: (context, t, _) => Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: p.today.withValues(alpha: t),
-                boxShadow: [
-                  BoxShadow(
-                    color: p.today.withValues(alpha: 0.35 * t),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // The new letter rolls up into place as the old one rolls
-                  // out above it, rather than every letter blinking out at once.
-                  // Clipped to one line, so the two never show stacked.
-                  AnimatedSwitcher(
-                    duration: _morph,
-                    switchInCurve: Curves.easeInOutCubic,
-                    switchOutCurve: Curves.easeInOutCubic,
-                    layoutBuilder: (current, previous) =>
-                        ClipRect(child: Stack(alignment: Alignment.center, children: [...previous, ?current])),
-                    transitionBuilder: (child, anim) => SlideTransition(
-                      position: Tween(
-                        begin: Offset(0, child.key == ValueKey(letter) ? 1 : -1),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: FadeTransition(opacity: anim, child: child),
-                    ),
-                    child: Text(
-                      letter,
-                      key: ValueKey(letter),
-                      style: TextStyle(
-                        fontFamily: Fonts.ui,
-                        fontSize: 10,
-                        color: Color.lerp(letterFg, p.onAccent, t)!.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w600,
+            builder: (context, r, _) => TweenAnimationBuilder<double>(
+              tween: Tween(end: isToday ? 1 : 0),
+              duration: _morph,
+              curve: Curves.easeInOutCubic,
+              builder: (context, t, _) {
+                final letterFg = Color.lerp(weekend ? p.other : p.inkMuted, p.inkMuted.withValues(alpha: 0.6), r)!;
+                final numberFg = Color.lerp(p.ink, p.inkMuted.withValues(alpha: 0.75), r)!;
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: p.today.withValues(alpha: t),
+                    boxShadow: [
+                      BoxShadow(
+                        color: p.today.withValues(alpha: 0.35 * t),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${day.day}',
-                    style: TextStyle(
-                      fontFamily: Fonts.ui,
-                      fontSize: 12.5,
-                      color: Color.lerp(numberFg, p.onAccent, t),
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                  child: Column(
+                    children: [
+                      // The new letter rolls up into place as the old one rolls
+                      // out above it, rather than every letter blinking out at once.
+                      // Clipped to one line, so the two never show stacked.
+                      AnimatedSwitcher(
+                        duration: _morph,
+                        switchInCurve: Curves.easeInOutCubic,
+                        switchOutCurve: Curves.easeInOutCubic,
+                        layoutBuilder: (current, previous) =>
+                            ClipRect(child: Stack(alignment: Alignment.center, children: [...previous, ?current])),
+                        transitionBuilder: (child, anim) => SlideTransition(
+                          position: Tween(
+                            begin: Offset(0, child.key == ValueKey(letter) ? 1 : -1),
+                            end: Offset.zero,
+                          ).animate(anim),
+                          child: FadeTransition(opacity: anim, child: child),
+                        ),
+                        child: Text(
+                          letter,
+                          key: ValueKey(letter),
+                          style: TextStyle(
+                            fontFamily: Fonts.ui,
+                            fontSize: 10,
+                            color: Color.lerp(letterFg, p.onAccent, t)!.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${day.day}',
+                        style: TextStyle(
+                          fontFamily: Fonts.ui,
+                          fontSize: 12.5,
+                          color: Color.lerp(numberFg, p.onAccent, t),
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ),

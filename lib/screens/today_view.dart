@@ -143,6 +143,11 @@ class _HabitsCard extends StatelessWidget {
     final habits = state.habits;
     final done = state.doneOn(day);
     final total = habits.length;
+    final subtitle = done == total && total > 0
+        ? 'Every ritual done. Beautiful.'
+        : state.isRestDay(day)
+        ? 'Rest day. Nothing you have to do.'
+        : '${total - done} still to go today';
 
     return Tile(
       padding: const EdgeInsets.fromLTRB(24, 22, 20, 12),
@@ -157,13 +162,19 @@ class _HabitsCard extends StatelessWidget {
                   children: [
                     const TileHeader(title: 'Daily rituals'),
                     const SizedBox(height: 6),
-                    Text(
-                      done == total && total > 0
-                          ? 'Every ritual done. Beautiful.'
-                          : state.isRestDay(day)
-                          ? 'Rest day. Nothing you have to do.'
-                          : '${total - done} still to go today',
-                      style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
+                    // Cross-fades when the line changes, left-aligned so the
+                    // old and new lines share their start.
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (current, previous) =>
+                          Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                      child: Text(
+                        subtitle,
+                        key: ValueKey(subtitle),
+                        style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
+                      ),
                     ),
                   ],
                 ),
@@ -321,9 +332,18 @@ class _HabitRow extends StatelessWidget {
                   : '$streak day streak${best > streak ? '  ·  best $best' : ''}',
               child: SizedBox(
                 width: 44,
-                child: Center(
+                // A new streak count (or none) cross-fades with a slight pop.
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(anim), child: child),
+                  ),
                   child: streak > 0
                       ? Container(
+                          key: ValueKey(streak),
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                           decoration: BoxDecoration(
                             color: p.accent.withValues(alpha: 0.12),
@@ -349,6 +369,7 @@ class _HabitRow extends StatelessWidget {
                         )
                       : Text(
                           '–',
+                          key: const ValueKey(0),
                           style: TextStyle(
                             fontSize: 13,
                             color: p.inkMuted.withValues(alpha: 0.4),
@@ -384,20 +405,30 @@ class _WeekTrail extends StatelessWidget {
     );
   }
 
-  Widget _mark(Palette p, AppState state, DateTime past) => Container(
-    margin: const EdgeInsets.only(left: 3),
-    width: 6,
-    height: 8,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(2.5),
-      color: switch (state.statusOf(past, habit)) {
-        HabitStatus.none => state.isRestDay(past) ? p.empty.withValues(alpha: 0.45) : p.empty,
-        HabitStatus.done => p.done,
-        HabitStatus.missed => p.missed.withValues(alpha: 0.75),
-        HabitStatus.other => p.other,
-      },
-    ),
-  );
+  // A rest day's blank mark fades rather than snapping; the colour itself
+  // is read from the palette every frame, so it follows a theme change.
+  Widget _mark(Palette p, AppState state, DateTime past) {
+    final status = state.statusOf(past, habit);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: state.isRestDay(past) ? 1 : 0),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
+      builder: (context, r, _) => Container(
+        margin: const EdgeInsets.only(left: 3),
+        width: 6,
+        height: 8,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(2.5),
+          color: switch (status) {
+            HabitStatus.none => p.empty.withValues(alpha: 1 - 0.55 * r),
+            HabitStatus.done => p.done,
+            HabitStatus.missed => p.missed.withValues(alpha: 0.75),
+            HabitStatus.other => p.other,
+          },
+        ),
+      ),
+    );
+  }
 }
 
 class _JournalCard extends StatefulWidget {

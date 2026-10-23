@@ -653,24 +653,30 @@ class _Toggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Container(
-      width: 36,
-      height: 22,
-      padding: const EdgeInsets.all(3),
-      alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(11),
-        gradient: on ? LinearGradient(colors: p.gradient.take(2).toList()) : null,
-        color: on ? null : p.empty,
-        border: on ? null : Border.all(color: p.tileBorder),
-      ),
-      child: Container(
-        width: 16,
-        height: 16,
+    // Slides and fills as it flips; colours come from the palette each
+    // frame, so a theme change recolours it in step with everything else.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: on ? 1 : 0),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) => Container(
+        width: 36,
+        height: 22,
+        padding: const EdgeInsets.all(3),
+        alignment: Alignment.lerp(Alignment.centerLeft, Alignment.centerRight, t),
         decoration: BoxDecoration(
-          color: on ? p.onAccent : p.tile,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: p.shadow.withValues(alpha: 0.2), blurRadius: 3, offset: const Offset(0, 1))],
+          borderRadius: BorderRadius.circular(11),
+          gradient: LinearGradient(colors: [for (final c in p.gradient.take(2)) Color.lerp(p.empty, c, t)!]),
+          border: Border.all(color: p.tileBorder.withValues(alpha: 1 - t)),
+        ),
+        child: Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: Color.lerp(p.tile, p.onAccent, t),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [BoxShadow(color: p.shadow.withValues(alpha: 0.2), blurRadius: 3, offset: const Offset(0, 1))],
+          ),
         ),
       ),
     );
