@@ -154,14 +154,44 @@ class _RingPainter extends CustomPainter {
 
     if (progress <= 0) return;
     final sweep = math.pi * 2 * progress;
-    // The gradient spans just the arc, so however far it's got it ends on
-    // done. It starts a cap's width early so the round start cap is
-    // coloured too.
-    final cap = stroke / 2 / (arcRect.width / 2);
+    final closed = progress >= 1;
+    final g = p.gradient;
+    final end = g.last;
+
+    // The whole arc is one stroke with one shader, its round ends drawn as
+    // discs in the shader's own colours. The wash is part of that shader
+    // rather than a second stroke on top, so there's never anything
+    // underneath to show through at its edges or where the ends meet.
+    //
+    // u runs from 0 at the top to 1 at the arc's tip. The gradient spans just
+    // the arc, so however far it's got it ends on done; the washed part,
+    // from the top to [wash], is pulled to that end colour by [solid].
+    Color base(double u) {
+      final x = u.clamp(0.0, 1.0) * (g.length - 1);
+      final i = math.min(x.floor(), g.length - 2);
+      return Color.lerp(g[i], g[i + 1], x - i)!;
+    }
+
+    Color washed(double u) => Color.lerp(base(u), end, solid)!;
+    final w = solid > 0 ? wash : 0.0;
+    Color colourAt(double u) => u < w ? washed(u) : base(u);
+
+    final stops = <double>[];
+    final colors = <Color>[];
+    for (var i = 0; i < g.length; i++) {
+      final u = i / (g.length - 1);
+      if (w > 0 && w < 1 && u > w && (stops.isEmpty || stops.last < w)) {
+        stops.addAll([w, w]);
+        colors.addAll([washed(w), base(w)]);
+      }
+      stops.add(u);
+      colors.add(w > 0 && u <= w ? washed(u) : base(u));
+    }
     final shader = SweepGradient(
-      endAngle: math.min(sweep + 2 * cap, math.pi * 2),
-      colors: p.gradient,
-      transform: GradientRotation(-math.pi / 2 - cap),
+      endAngle: sweep,
+      colors: colors,
+      stops: stops,
+      transform: const GradientRotation(-math.pi / 2),
     ).createShader(rect);
 
     // Soft, clean ambient glow under the arc; it takes on the done colour
@@ -180,7 +210,6 @@ class _RingPainter extends CustomPainter {
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 + 4 * flare),
     );
 
-    // Crisp foreground gradient arc
     canvas.drawArc(
       arcRect,
       -math.pi / 2,
@@ -189,35 +218,23 @@ class _RingPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..strokeCap = StrokeCap.round
         ..shader = shader,
     );
 
-    // The gradient's done end washing round over it, its round leading cap
-    // the crest of the wave. It starts flat a little behind the gradient's
-    // seam, over colour that already matches it: a round start cap let the
-    // gradient's first colour peek out at its corners, and a flat edge right
-    // on the seam let it bleed through as a hairline.
-    if (wash > 0 && solid > 0) {
-      // One layer, so where the crest overlaps the arc it isn't doubled
-      // while the colour fades out.
-      canvas.saveLayer(rect.inflate(stroke), Paint()..color = Color.fromRGBO(0, 0, 0, solid));
-      final washPaint = Paint()..color = p.gradient.last;
-      final start = -math.pi / 2 - 3 * cap;
-      final end = start + sweep * wash;
-      canvas.drawArc(
-        arcRect,
-        start,
-        sweep * wash,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = stroke
-          ..color = washPaint.color,
-      );
-      final r = arcRect.width / 2;
-      canvas.drawCircle(arcRect.center + Offset(math.cos(end), math.sin(end)) * r, stroke / 2, washPaint);
-      canvas.restore();
+    final r = arcRect.width / 2;
+    void disc(double u, Color color) {
+      final a = -math.pi / 2 + sweep * u;
+      canvas.drawCircle(arcRect.center + Offset(math.cos(a), math.sin(a)) * r, stroke / 2, Paint()..color = color);
+    }
+
+    if (!closed) {
+      // Round ends; as the arc closes the tip's disc slides over the start's.
+      disc(0, colourAt(0));
+      disc(1, end);
+    } else if (w < 1) {
+      // Closed and washing: the tip has run on through the top and is now
+      // the crest, still round, with the done colour behind it.
+      disc(w, washed(w));
     }
   }
 
