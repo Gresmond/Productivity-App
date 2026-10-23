@@ -134,7 +134,70 @@ class _HabitsCard extends StatelessWidget {
   }
 }
 
-class _HabitRow extends StatefulWidget {
+/// Fades a highlight in behind [child] on hover, as the month grid's rows
+/// do. Only the highlight and divider repaint; [child] is never rebuilt.
+class _HoverHighlight extends StatefulWidget {
+  const _HoverHighlight({required this.divider, required this.child});
+
+  final bool divider;
+  final Widget child;
+
+  @override
+  State<_HoverHighlight> createState() => _HoverHighlightState();
+}
+
+class _HoverHighlightState extends State<_HoverHighlight> {
+  static const _fade = Duration(milliseconds: 140);
+
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Stack(
+        // The list gives each row a fixed height; the row fills it.
+        fit: StackFit.passthrough,
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _hover ? 1 : 0,
+                duration: _fade,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: p.empty.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // The divider fades out as the highlight fades in, rather than
+          // swapping borders mid-animation.
+          if (widget.divider)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _hover ? 0 : 1,
+                  duration: _fade,
+                  child: ColoredBox(color: p.tileBorder.withValues(alpha: 0.5), child: const SizedBox(height: 1)),
+                ),
+              ),
+            ),
+          widget.child,
+        ],
+      ),
+    );
+  }
+}
+
+class _HabitRow extends StatelessWidget {
   const _HabitRow({required this.habit, required this.day, required this.cellSize, required this.divider});
 
   final Habit habit;
@@ -143,44 +206,28 @@ class _HabitRow extends StatefulWidget {
   final bool divider;
 
   @override
-  State<_HabitRow> createState() => _HabitRowState();
-}
-
-class _HabitRowState extends State<_HabitRow> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    final streak = state.currentStreak(widget.habit);
-    final best = state.bestStreak(widget.habit);
+    final streak = state.currentStreak(habit);
+    final best = state.bestStreak(habit);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final showWeekTrail = constraints.maxWidth >= 240;
 
-        return MouseRegion(
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
+        return _HoverHighlight(
+          divider: divider,
+          child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: _hover ? p.empty.withValues(alpha: 0.4) : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: widget.divider && !_hover
-                  ? Border(top: BorderSide(color: p.tileBorder.withValues(alpha: 0.5)))
-                  : null,
-            ),
             child: Row(
               children: [
                 Expanded(
                   child: Tooltip(
-                    message: widget.habit.name,
+                    message: habit.name,
                     waitDuration: const Duration(milliseconds: 600),
                     child: Text(
-                      widget.habit.name,
+                      habit.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -194,7 +241,7 @@ class _HabitRowState extends State<_HabitRow> {
                 ),
                 if (showWeekTrail) ...[
                   const SizedBox(width: 10),
-                  _WeekTrail(habit: widget.habit, day: widget.day),
+                  _WeekTrail(habit: habit, day: day),
                 ],
                 const SizedBox(width: 8),
                 Tooltip(
@@ -240,7 +287,7 @@ class _HabitRowState extends State<_HabitRow> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                StatusCell(day: widget.day, habit: widget.habit, size: widget.cellSize),
+                StatusCell(day: day, habit: habit, size: cellSize),
               ],
             ),
           ),
