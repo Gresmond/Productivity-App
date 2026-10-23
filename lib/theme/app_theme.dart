@@ -26,6 +26,7 @@ class Palette extends ThemeExtension<Palette> {
     required this.accent,
     required this.onAccent,
     required this.gradient,
+    required this.today,
     required this.done,
     required this.missed,
     required this.other,
@@ -52,6 +53,10 @@ class Palette extends ThemeExtension<Palette> {
   /// Signature gradient for selected tabs, headers and the progress ring.
   /// Always three stops, so themes can blend into each other.
   final List<Color> gradient;
+
+  /// Solid fill for the current day's tab in the month view; kept apart
+  /// from the status colours so it never reads as a ticked box.
+  final Color today;
 
   /// Habit status colours.
   final Color done;
@@ -80,6 +85,7 @@ class Palette extends ThemeExtension<Palette> {
       accent: c(accent, other.accent),
       onAccent: c(onAccent, other.onAccent),
       gradient: [for (var i = 0; i < gradient.length; i++) c(gradient[i], other.gradient[i])],
+      today: c(today, other.today),
       done: c(done, other.done),
       missed: c(missed, other.missed),
       other: c(this.other, other.other),
@@ -101,6 +107,7 @@ const mainPalette = Palette(
   accent: Color(0xFF405BF0),
   onAccent: Color(0xFFFFFFFF),
   gradient: [Color(0xFF3256ED), Color(0xFF6C4EE8), Color(0xFFD44B74)],
+  today: Color(0xFF2F3A78),
   done: Color(0xFF3B66F5),
   missed: Color(0xFFE85372),
   other: Color(0xFF8E6FE6),
@@ -120,6 +127,7 @@ const darkPalette = Palette(
   accent: Color(0xFF8298FF),
   onAccent: Color(0xFFFFFFFF),
   gradient: [Color(0xFF4F6EF0), Color(0xFF8E62F0), Color(0xFFF0668C)],
+  today: Color(0xFF4552A6),
   done: Color(0xFF5B7FFF),
   missed: Color(0xFFF05D82),
   other: Color(0xFFA582F7),
@@ -139,6 +147,7 @@ const pastelPalette = Palette(
   accent: Color(0xFF7E6CD9),
   onAccent: Color(0xFFFFFFFF),
   gradient: [Color(0xFF7F9DF2), Color(0xFFAD8DEB), Color(0xFFF08DA8)],
+  today: Color(0xFF7E6CD9),
   done: Color(0xFF6F93EB),
   missed: Color(0xFFEB7E9A),
   other: Color(0xFFA98CE8),
@@ -158,6 +167,7 @@ const citrusPalette = Palette(
   accent: Color(0xFF4D754A),
   onAccent: Color(0xFFFFFFFF),
   gradient: [Color(0xFF527E4E), Color(0xFFD49250), Color(0xFFD15F4E)],
+  today: Color(0xFF3F7A74),
   done: Color(0xFF5D8C57),
   missed: Color(0xFFCF6554),
   other: Color(0xFFDB9746),
@@ -177,6 +187,7 @@ const sunsetPalette = Palette(
   accent: Color(0xFFDC4D6B),
   onAccent: Color(0xFFFFFFFF),
   gradient: [Color(0xFFF28F42), Color(0xFFE54E70), Color(0xFF7A4BAE)],
+  today: Color(0xFF6A4AB0),
   done: Color(0xFFE86B40),
   missed: Color(0xFF944F8E),
   other: Color(0xFFDD6588),
@@ -196,6 +207,7 @@ const eclipsePalette = Palette(
   accent: Color(0xFFB7AEF5),
   onAccent: Color(0xFFFFFFFF),
   gradient: [Color(0xFF5B3FC0), Color(0xFF6A62B4), Color(0xFF6F7B99)],
+  today: Color(0xFF5B3FC0),
   done: Color(0xFF8E9CDB),
   missed: Color(0xFFD8709F),
   other: Color(0xFF9C7FEA),

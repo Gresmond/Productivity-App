@@ -940,14 +940,10 @@ class _DayHeader extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [for (final c in p.gradient.take(2)) isToday ? c : c.withValues(alpha: 0)],
-              ),
+              color: p.today.withValues(alpha: isToday ? 1 : 0),
               boxShadow: [
                 BoxShadow(
-                  color: p.gradient.first.withValues(alpha: isToday ? 0.35 : 0),
+                  color: p.today.withValues(alpha: isToday ? 0.35 : 0),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
