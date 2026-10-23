@@ -14,8 +14,9 @@ class Habit {
   final int id;
   String name;
 
-  /// Shown on hover in place of the name; only the sleep schedule has one.
-  final String? description;
+  /// Shown on hover in place of the name: the note you wrote for a ritual,
+  /// or the sleep schedule's fixed text.
+  String? description;
 }
 
 /// The sleep schedule: the same four in every month, below the rituals.

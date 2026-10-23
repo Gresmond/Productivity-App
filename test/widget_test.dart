@@ -327,7 +327,10 @@ void main() {
       Store.open(path).close();
       // Back to how a database looked before the sleep schedule.
       final db = sqlite3.open(path);
-      db.execute('DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits; PRAGMA user_version = 2;');
+      db.execute('''
+        DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits;
+        ALTER TABLE habits DROP COLUMN note; PRAGMA user_version = 2;
+      ''');
       final ids = <String, int>{};
       for (final (i, name) in [
         'Get up at 8:30 am', 'Brush teeth', 'Wind down at 8:45', 'Journal', 'Meditate', //
@@ -386,6 +389,35 @@ void main() {
       state.cycle(DateTime(2026, 10, 31), getUp);
       state.cycle(DateTime(2026, 11, 1), nov[2]);
       expect(state.currentStreak(nov[2]), 2);
+    });
+  });
+
+  group('ritual notes', () {
+    test('a note follows its ritual into every month, and is kept', () {
+      final dir = Directory.systemTemp.createTempSync('productivity_notes');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/app.db';
+      var now = DateTime(2026, 10, 31);
+      var state = AppState(Store.open(path), clock: () => now);
+      final read = state.habits.firstWhere((h) => h.name == 'Read');
+      state.setHabitNote(read, '  20 pages before bed ');
+      expect(read.description, '20 pages before bed');
+
+      now = DateTime(2026, 11, 1);
+      state.checkDate();
+      final nov = state.habits.firstWhere((h) => h.name == 'Read');
+      expect(nov.description, '20 pages before bed', reason: 'copied month');
+      expect(state.habitsFor(2025, 3).firstWhere((h) => h.name == 'Read').description, '20 pages before bed');
+
+      state.setHabitNote(nov, '30 pages');
+      expect(state.habitsFor(2026, 10).firstWhere((h) => h.name == 'Read').description, '30 pages');
+      state.store.close();
+
+      state = AppState(Store.open(path), clock: () => now);
+      expect(state.habits.firstWhere((h) => h.name == 'Read').description, '30 pages');
+      state.setHabitNote(state.habits.firstWhere((h) => h.name == 'Read'), '  ');
+      expect(state.habits.firstWhere((h) => h.name == 'Read').description, isNull, reason: 'blank removes it');
+      state.store.close();
     });
   });
 
@@ -578,6 +610,8 @@ void main() {
 
     await tester.tap(find.text('Edit rituals'));
     await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Add a note').first, 'Make the bed too');
+    expect(state.habits.first.description, 'Make the bed too');
     await tester.enterText(find.byType(TextField).last, 'Stretch');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -588,6 +622,26 @@ void main() {
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(find.text('Stretch'), findsOneWidget);
+  });
+
+  testWidgets('the month view fits rituals and sleep schedule without scrolling', (tester) async {
+    await _loadFonts();
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    state.addHabit(2026, 10, 'A ritual with a name long enough to need two lines here');
+    // 2500 x 1380 is the window on the user's 1440p screen.
+    for (final size in const [Size(2500, 1380), Size(1440, 900), Size(1920, 1080), Size(960, 1040)]) {
+      tester.view.physicalSize = size;
+      state.showMonth(10);
+      await tester.pumpWidget(EclipseApp(state: state));
+      await tester.pumpAndSettle();
+      final scroll = tester
+          .stateList<ScrollableState>(find.byType(Scrollable))
+          .singleWhere((s) => s.position.axis == Axis.vertical);
+      await _shoot(tester, 'month_fit_${size.width.round()}x${size.height.round()}');
+      expect(scroll.position.maxScrollExtent, 0, reason: '$size');
+    }
   });
 
   testWidgets('a long ritual wraps onto more lines, its row growing to fit', (tester) async {

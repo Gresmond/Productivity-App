@@ -23,6 +23,10 @@ class MonthView extends StatefulWidget {
 class _MonthViewState extends State<MonthView> {
   static const _nameWidth = 260.0;
 
+  /// The page's height not taken by the two grids' rows: the page's and
+  /// cards' padding, their headers, day headers and percentages.
+  static const _chrome = 500.0;
+
   bool _editing = false;
 
   @override
@@ -45,6 +49,9 @@ class _MonthViewState extends State<MonthView> {
         : state.isPreviewMonth(year, month)
             ? 'PREVIEW  ·  SAVED WHEN YOU TICK OR EDIT'
             : 'RITUALS  ·  ${habits.length}';
+    final sleep = state.sleepHabits;
+    // Squares as big as they can be with both cards on screen at once.
+    final maxCell = (height - _chrome) / (habits.length + sleep.length) - 5;
 
     final Widget body;
     if (_editing) {
@@ -60,10 +67,9 @@ class _MonthViewState extends State<MonthView> {
         ),
       );
     } else {
-      body = _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth, height: height);
+      body = _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth, maxCell: maxCell);
     }
 
-    final sleep = state.sleepHabits;
     final header = TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: p.inkMuted);
 
     return SingleChildScrollView(
@@ -73,8 +79,8 @@ class _MonthViewState extends State<MonthView> {
         children: [
           _ritualsTile(label, header, future, body, habits.isEmpty),
           const SizedBox(height: 20),
-          // Below the fold: sized like the rituals' grid, so its squares and
-          // days line up with theirs.
+          // Sized like the rituals' grid, so its squares and days line up
+          // with theirs.
           Tile(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,9 +92,7 @@ class _MonthViewState extends State<MonthView> {
                   month: month,
                   habits: sleep,
                   nameWidth: _nameWidth,
-                  height: height,
-                  fitRows: habits.isEmpty ? sleep.length : habits.length,
-                  legend: false,
+                  maxCell: maxCell,
                   doneLabel: 'of the logged schedule kept',
                 ),
               ],
@@ -164,9 +168,7 @@ class _Grid extends StatefulWidget {
     required this.month,
     required this.habits,
     required this.nameWidth,
-    required this.height,
-    this.fitRows,
-    this.legend = true,
+    required this.maxCell,
     this.doneLabel = 'of logged rituals done',
   });
 
@@ -175,15 +177,8 @@ class _Grid extends StatefulWidget {
   final List<Habit> habits;
   final double nameWidth;
 
-  /// The page's height: squares grow until the grid would need scrolling.
-  final double height;
-
-  /// How many rows the squares are sized to fit on the page, when not
-  /// this grid's own: a second grid takes the first one's square size.
-  final int? fitRows;
-
-  /// Whether to show what the colours mean, beside the percentage.
-  final bool legend;
+  /// The largest square that keeps the page from scrolling.
+  final double maxCell;
   final String doneLabel;
 
   @override
@@ -194,10 +189,6 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
   static const _morph = Duration(milliseconds: 420);
   static const _minCol = 22.0;
   static const _maxCell = 64.0;
-
-  /// The page's height not taken by the grid's rows: the card's padding and
-  /// header, the day headers and the legend.
-  static const _chrome = 290.0;
 
   /// How many day columns are showing, easing between whole numbers. Column
   /// d is (shown - d + 1) of a column wide, between none and all of one.
@@ -274,9 +265,7 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
         // month to month and only their places animate.
         double colFor(double days) => (gridWidth(days) - nameWidth) / days;
         final width = gridWidth(dayCount.toDouble());
-        final fitRows = widget.fitRows ?? habits.length;
-        final byHeight = fitRows == 0 ? _maxCell : (widget.height - _chrome) / fitRows - 5;
-        final cell = [colFor(31) - 6, byHeight, _maxCell].reduce((a, b) => a < b ? a : b).clamp(_minCol - 6, _maxCell);
+        final cell = [colFor(31) - 6, widget.maxCell, _maxCell].reduce((a, b) => a < b ? a : b).clamp(_minCol - 6, _maxCell);
         final columns = [
           for (var d = 1; d <= 31; d++)
             if (_dayAt(d) case final day?) (number: d, day: day, leaving: d > dayCount),
@@ -369,59 +358,52 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
                 days,
               ],
             ),
-            const SizedBox(height: 26),
-            Row(
-              children: [
-                if (widget.legend) ...[
-                  _Legend(color: p.done, label: 'Done', icon: Icons.check_rounded),
-                  _Legend(color: p.missed, label: 'Not done', icon: Icons.close_rounded),
-                  _Legend(color: p.other, label: 'Other', icon: Icons.remove_rounded),
-                ],
-                const Spacer(),
-                AnimatedOpacity(
-                  opacity: logged > 0 ? 1 : 0,
-                  duration: _morph,
-                  curve: Curves.easeInOutCubic,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: p.empty.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: p.tileBorder.withValues(alpha: 0.6), width: 0.8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(end: logged == 0 ? 0 : done * 100 / logged),
-                          duration: _morph,
-                          curve: Curves.easeInOutCubic,
-                          builder: (context, percent, _) => Text(
-                            '${percent.round()}%',
-                            style: TextStyle(
-                              fontFamily: Fonts.display,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: p.ink,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          widget.doneLabel,
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AnimatedOpacity(
+                opacity: logged > 0 ? 1 : 0,
+                duration: _morph,
+                curve: Curves.easeInOutCubic,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: p.empty.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: p.tileBorder.withValues(alpha: 0.6), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(end: logged == 0 ? 0 : done * 100 / logged),
+                        duration: _morph,
+                        curve: Curves.easeInOutCubic,
+                        builder: (context, percent, _) => Text(
+                          '${percent.round()}%',
                           style: TextStyle(
-                            fontFamily: Fonts.ui,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: p.inkMuted,
+                            fontFamily: Fonts.display,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: p.ink,
+                            fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.doneLabel,
+                        style: TextStyle(
+                          fontFamily: Fonts.ui,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: p.inkMuted,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ],
         );
@@ -710,13 +692,14 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
           child: Padding(
             padding: const EdgeInsets.only(right: 16),
             // A long name wraps onto a second line, set a little tighter so
-            // the row barely grows.
+            // the row barely grows, unless squares are too small for two
+            // lines: then it's cut short, whole on hover.
             child: Tooltip(
               message: widget.habit.description ?? widget.habit.name,
               waitDuration: const Duration(milliseconds: 600),
               child: Text(
                 widget.habit.name,
-                maxLines: 2,
+                maxLines: height >= 2 * 13.5 * 1.15 + 2 ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: Fonts.body,
@@ -856,7 +839,8 @@ class _RitualEditorState extends State<_RitualEditor> {
           ),
           const SizedBox(height: 18),
           Text(
-            'Changes apply to ${monthNames[month - 1]} only. Each new month starts as a copy of the one before.',
+            'Changes apply to ${monthNames[month - 1]} only, except notes, which follow a ritual into every month. '
+            'Each new month starts as a copy of the one before.',
             style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
           ),
         ],
@@ -885,11 +869,13 @@ class _EditableRow extends StatefulWidget {
 
 class _EditableRowState extends State<_EditableRow> {
   late final _controller = TextEditingController(text: widget.habit.name);
+  late final _note = TextEditingController(text: widget.habit.description);
   late String _before = widget.habit.name;
 
   @override
   void dispose() {
     _controller.dispose();
+    _note.dispose();
     super.dispose();
   }
 
@@ -919,23 +905,42 @@ class _EditableRowState extends State<_EditableRow> {
           ),
           const SizedBox(width: 4),
           Expanded(
-            // Renames as you type, but a ritual can't be blank: leaving the
-            // field empty puts back the name it had before you started.
-            child: Focus(
-              onFocusChange: (focused) {
-                if (focused) {
-                  _before = _controller.text;
-                } else if (_controller.text.trim().isEmpty) {
-                  _controller.text = _before;
-                  state.renameHabit(widget.year, widget.month, widget.habit, _before);
-                }
-              },
-              child: TextField(
-                controller: _controller,
-                style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
-                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                onChanged: (v) => state.renameHabit(widget.year, widget.month, widget.habit, v),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Renames as you type, but a ritual can't be blank: leaving the
+                // field empty puts back the name it had before you started.
+                Focus(
+                  onFocusChange: (focused) {
+                    if (focused) {
+                      _before = _controller.text;
+                    } else if (_controller.text.trim().isEmpty) {
+                      _controller.text = _before;
+                      state.renameHabit(widget.year, widget.month, widget.habit, _before);
+                    }
+                  },
+                  child: TextField(
+                    controller: _controller,
+                    style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
+                    decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                    onChanged: (v) => state.renameHabit(widget.year, widget.month, widget.habit, v),
+                  ),
+                ),
+                // Shown on hover over the ritual, in every month it's in.
+                TextField(
+                  controller: _note,
+                  maxLines: null,
+                  style: TextStyle(fontFamily: Fonts.body, fontSize: 12.5, color: p.inkMuted),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.only(bottom: 8),
+                    hintText: 'Add a note',
+                    hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.5)),
+                  ),
+                  onChanged: (v) => state.setHabitNote(widget.habit, v),
+                ),
+              ],
             ),
           ),
           IconButton(
@@ -1088,54 +1093,6 @@ class _DayHeader extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  const _Legend({required this.color, required this.label, this.icon});
-
-  final Color color;
-  final String label;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Padding(
-      padding: const EdgeInsets.only(right: 22),
-      child: Row(
-        children: [
-          Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.3),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1.5),
-                ),
-              ],
-            ),
-            child: icon == null
-                ? null
-                : Center(child: Icon(icon, size: 10, color: p.onAccent)),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: Fonts.ui,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              color: p.inkMuted,
-            ),
-          ),
-        ],
       ),
     );
   }

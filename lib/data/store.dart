@@ -130,6 +130,14 @@ class Store {
         _db.execute('PRAGMA user_version = 3');
       });
     }
+    if (version < 4) {
+      _db.execute('''
+        -- A ritual's note, shown on hover. On the habit, not the month, so it
+        -- follows the ritual through every month.
+        ALTER TABLE habits ADD COLUMN note TEXT;
+        PRAGMA user_version = 4;
+      ''');
+    }
   }
 
   // Habits
@@ -149,10 +157,11 @@ class Store {
 
   List<Habit> monthHabits(int year, int month) => [
         for (final r in _db.select(
-          'SELECT habit_id, name FROM month_habits WHERE year = ? AND month = ? ORDER BY position',
+          'SELECT habit_id, name, note FROM month_habits JOIN habits ON habits.id = habit_id '
+          'WHERE year = ? AND month = ? ORDER BY position',
           [year, month],
         ))
-          Habit(r['habit_id'] as int, r['name'] as String),
+          Habit(r['habit_id'] as int, r['name'] as String, description: r['note'] as String?),
       ];
 
   /// The closest month that has a ritual list, preferring earlier months.
@@ -193,6 +202,10 @@ class Store {
       'UPDATE month_habits SET name = ? WHERE year = ? AND month = ? AND habit_id = ?',
       [name, year, month, habitId],
     );
+  }
+
+  void setHabitNote(int habitId, String? note) {
+    _db.execute('UPDATE habits SET note = ? WHERE id = ?', [note, habitId]);
   }
 
   void removeHabit(int year, int month, int habitId) {
