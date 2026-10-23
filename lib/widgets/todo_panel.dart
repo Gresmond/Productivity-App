@@ -24,11 +24,16 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
   /// Drives every row's glide to its new place when the order changes.
   /// The glide waits for the tick to fill, so the mark lands first.
   late final _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 640), value: 1);
+  static const _afterTick = Interval(0.3, 1, curve: Curves.easeInOutCubic);
   late final _curved = CurvedAnimation(
     parent: _slide,
-    curve: const Interval(0.3, 1, curve: Curves.easeInOutCubic),
+    curve: _afterTick,
   );
   List<int> _order = const [];
+
+  /// Items already shown; any others fade in. Null until the first build,
+  /// so a list that's just opened appears at once.
+  Set<int>? _seen;
   int _generation = 0;
 
   @override
@@ -65,10 +70,15 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
     if (!_sameOrder(order, _order)) {
       if (_order.isNotEmpty) {
         _generation++;
+        // A removed row has already faded, so the rows below close up at once.
+        final removed = order.length < _order.length;
+        _slide.duration = Duration(milliseconds: removed ? 420 : 640);
+        _curved.curve = removed ? Curves.easeInOutCubic : _afterTick;
         _slide.forward(from: 0);
       }
       _order = order;
     }
+    final seen = _seen ??= {...order};
 
     return Tile(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
@@ -126,7 +136,7 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
                         for (final item in items)
                           RepaintBoundary(
                             key: ValueKey(item.id),
-                            child: _TodoRow(scope: widget.scope, item: item),
+                            child: _TodoRow(scope: widget.scope, item: item, fadeIn: seen.add(item.id)),
                           ),
                       ],
                     ),
@@ -297,11 +307,17 @@ class _RenderSlidingColumn extends RenderBox
     final t = _progress.value;
     // The row going furthest (the one just ticked) rides above the rest on
     // the card's colour, so rows never show through each other as they pass.
+    // Only when rows cross: rows closing up after a removal just slide.
     var furthest = 0.0;
+    var up = false, down = false;
     for (var child = firstChild; child != null; child = (child.parentData! as _SlideParentData).nextSibling) {
       final data = child.parentData! as _SlideParentData;
-      furthest = math.max(furthest, (data.target! - data.from!).abs());
+      final move = data.target! - data.from!;
+      furthest = math.max(furthest, move.abs());
+      up |= move < -0.5;
+      down |= move > 0.5;
     }
+    if (!(up && down)) furthest = double.infinity;
     final lifted = <RenderBox>[];
     var child = firstChild;
     while (child != null) {
@@ -341,18 +357,47 @@ class _RenderSlidingColumn extends RenderBox
 }
 
 class _TodoRow extends StatefulWidget {
-  const _TodoRow({required this.scope, required this.item});
+  const _TodoRow({required this.scope, required this.item, this.fadeIn = false});
 
   final TodoScope scope;
   final TodoItem item;
+
+  /// Fades in when first shown: a newly added item.
+  final bool fadeIn;
 
   @override
   State<_TodoRow> createState() => _TodoRowState();
 }
 
-class _TodoRowState extends State<_TodoRow> {
+class _TodoRowState extends State<_TodoRow> with SingleTickerProviderStateMixin {
   bool _hover = false;
   bool _pressed = false;
+
+  /// In when added; out before it's removed, then the rows below glide up.
+  late final _fade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+    value: widget.fadeIn ? 0 : 1,
+  );
+  late final _opacity = CurvedAnimation(parent: _fade, curve: Curves.easeInOutCubic);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fadeIn) _fade.forward();
+  }
+
+  @override
+  void dispose() {
+    _opacity.dispose();
+    _fade.dispose();
+    super.dispose();
+  }
+
+  Future<void> _remove(AppState state) async {
+    await _fade.reverse();
+    if (mounted) state.removeTodo(widget.scope, widget.item);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -360,92 +405,95 @@ class _TodoRowState extends State<_TodoRow> {
     final state = AppScope.of(context);
     final item = widget.item;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() {
-        _hover = false;
-        _pressed = false;
-      }),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: () => state.toggleTodo(item),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          margin: const EdgeInsets.symmetric(vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: _hover ? p.empty.withValues(alpha: 0.35) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              _Check(done: item.done, hover: _hover, pressed: _pressed),
-              const SizedBox(width: 11),
-              Expanded(
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 200),
-                  style: TextStyle(
-                    fontFamily: Fonts.body,
-                    fontSize: 14,
-                    height: 1.35,
-                    color: item.done
-                        ? p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.75 : 0.7)
-                        : p.ink,
-                    decoration: item.done ? TextDecoration.lineThrough : null,
-                    decorationColor: p.inkMuted.withValues(alpha: 0.45),
+    return FadeTransition(
+      opacity: _opacity,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() {
+          _hover = false;
+          _pressed = false;
+        }),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTap: () => state.toggleTodo(item),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: _hover ? p.empty.withValues(alpha: 0.35) : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                _Check(done: item.done, hover: _hover, pressed: _pressed),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      fontFamily: Fonts.body,
+                      fontSize: 14,
+                      height: 1.35,
+                      color: item.done
+                          ? p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.75 : 0.7)
+                          : p.ink,
+                      decoration: item.done ? TextDecoration.lineThrough : null,
+                      decorationColor: p.inkMuted.withValues(alpha: 0.45),
+                    ),
+                    child: Text(item.text, maxLines: 2, overflow: TextOverflow.ellipsis),
                   ),
-                  child: Text(item.text, maxLines: 2, overflow: TextOverflow.ellipsis),
                 ),
-              ),
-              if (item.carried > 0) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                  decoration: BoxDecoration(
-                    color: p.missed.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.history_rounded, size: 11, color: p.missed),
-                      const SizedBox(width: 3),
-                      Text(
-                        'carried ×${item.carried}',
-                        style: TextStyle(
-                          fontFamily: Fonts.ui,
-                          fontSize: 10.5,
-                          color: p.missed,
-                          fontWeight: FontWeight.w600,
+                if (item.carried > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: p.missed.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.history_rounded, size: 11, color: p.missed),
+                        const SizedBox(width: 3),
+                        Text(
+                          'carried ×${item.carried}',
+                          style: TextStyle(
+                            fontFamily: Fonts.ui,
+                            fontSize: 10.5,
+                            color: p.missed,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-              AnimatedOpacity(
-                opacity: _hover ? 1 : 0,
-                duration: const Duration(milliseconds: 150),
-                child: Tooltip(
-                  message: 'Remove',
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: _hover ? () => state.removeTodo(widget.scope, item) : null,
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: p.empty.withValues(alpha: 0.8)),
-                        child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
+                ],
+                AnimatedOpacity(
+                  opacity: _hover ? 1 : 0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Tooltip(
+                    message: 'Remove',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: _hover && _fade.status != AnimationStatus.reverse ? () => _remove(state) : null,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: p.empty.withValues(alpha: 0.8)),
+                          child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
