@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s2_fire" x1="20" y1="14" x2="44" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffdd6b"/>
+      <stop offset="45%" stop-color="#ff6b4a"/>
+      <stop offset="100%" stop-color="#dc267f"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="#1e132c"/>
+  <!-- Outer corona pulse arc -->
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#e2487a" stroke-width="1.8" stroke-dasharray="24 6" opacity="0.4"/>
+  <!-- Annular eclipse ring -->
+  <circle cx="32" cy="32" r="14.5" fill="none" stroke="url(#s2_fire)" stroke-width="3.2"/>
+  <!-- Occulting dark moon -->
+  <circle cx="32" cy="32" r="11.5" fill="#1e132c"/>
+  <!-- Small orbital satellite node -->
+  <circle cx="45.5" cy="18.5" r="2.4" fill="#ffdd6b"/>
+</svg>

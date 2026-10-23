@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="sig_grad" x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3256ed"/>
+      <stop offset="50%" stop-color="#6c4ee8"/>
+      <stop offset="100%" stop-color="#d44b74"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="url(#sig_grad)"/>
+  <!-- Outer ring -->
+  <circle cx="32" cy="32" r="17" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+  <!-- Inner concentric arc (225° sweep) -->
+  <path d="M 32 21 A 11 11 0 1 1 21 32" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" opacity="0.75"/>
+  <!-- Center core -->
+  <circle cx="32" cy="32" r="5.5" fill="#ffffff"/>
+  <!-- Orbiting satellite node at 45° -->
+  <circle cx="44" cy="20" r="2.8" fill="#ffffff"/>
+</svg>

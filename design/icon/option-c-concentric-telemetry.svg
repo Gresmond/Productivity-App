@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="27" fill="#161a2b"/>
+  <!-- Outer ring -->
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+  <!-- Middle accent ring -->
+  <circle cx="32" cy="32" r="11.5" fill="none" stroke="#5b7fff" stroke-width="2.2"/>
+  <!-- Center core -->
+  <circle cx="32" cy="32" r="4.5" fill="#ffffff"/>
+  <!-- Primary satellite at 45° -->
+  <circle cx="44.7" cy="19.3" r="2.6" fill="#ffffff"/>
+  <!-- Secondary satellite at 225° -->
+  <circle cx="23.9" cy="40.1" r="1.8" fill="#5b7fff"/>
+</svg>

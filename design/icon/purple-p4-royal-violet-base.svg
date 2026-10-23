@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Base: vibrant royal violet -->
+  <circle cx="32" cy="32" r="27" fill="#5824b0"/>
+  <!-- Corona ring -->
+  <circle cx="32" cy="32" r="15" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+  <!-- Occulting dark moon -->
+  <circle cx="30.8" cy="33.2" r="13.5" fill="#180e2e"/>
+  <!-- Brilliant white diamond flare -->
+  <circle cx="42.6" cy="21.4" r="3.4" fill="#ffffff"/>
+</svg>

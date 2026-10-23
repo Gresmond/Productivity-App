@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <!-- Mask to create clean negative-space gap behind planet -->
+    <mask id="planet_gap">
+      <rect width="64" height="64" fill="#ffffff"/>
+      <circle cx="32" cy="32" r="9.5" fill="#000000"/>
+    </mask>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="#151828"/>
+  <g transform="rotate(-25 32 32)">
+    <!-- Back orbit ring with depth mask -->
+    <ellipse cx="32" cy="32" rx="18.5" ry="7" fill="none" stroke="#5b7fff" stroke-width="2.4" opacity="0.45" mask="url(#planet_gap)"/>
+    <!-- Planet body -->
+    <circle cx="32" cy="32" r="7.5" fill="#ffffff"/>
+    <!-- Front orbit ring -->
+    <path d="M 13.5 32 A 18.5 7 0 0 0 50.5 32" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- Satellite beacon on front ring at 45° -->
+    <circle cx="45.1" cy="37" r="2.4" fill="#ffffff"/>
+  </g>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs><clipPath id="base"><circle cx="32" cy="32" r="27"/></clipPath></defs>
+<g clip-path="url(#base)">
+<circle cx="32" cy="32" r="27" fill="#2c1b5c"/>
+<g stroke="#cdbff7" stroke-width="1.8" stroke-linecap="round"><line x1="47.16" y1="24.68" x2="49.93" y2="25.83"/><line x1="43.91" y1="27.93" x2="45.06" y2="30.70"/><line x1="39.32" y1="27.93" x2="38.17" y2="30.70"/><line x1="36.07" y1="24.68" x2="33.30" y2="25.83"/><line x1="36.07" y1="20.09" x2="33.30" y2="18.94"/><line x1="39.32" y1="16.84" x2="38.17" y2="14.07"/><line x1="43.91" y1="16.84" x2="45.06" y2="14.07"/><line x1="47.16" y1="20.09" x2="49.93" y2="18.94"/></g>
+<g stroke="#ffffff" stroke-width="2" stroke-linecap="round"><line x1="47.62" y1="22.38" x2="52.62" y2="22.38"/><line x1="45.86" y1="26.63" x2="49.39" y2="30.16"/><line x1="41.62" y1="28.38" x2="41.62" y2="33.38"/><line x1="37.37" y1="26.63" x2="33.84" y2="30.16"/><line x1="35.62" y1="22.38" x2="30.62" y2="22.38"/><line x1="37.37" y1="18.14" x2="33.84" y2="14.61"/><line x1="41.62" y1="16.38" x2="41.62" y2="11.38"/><line x1="45.86" y1="18.14" x2="49.39" y2="14.61"/></g>
+<circle cx="41.6167" cy="22.3833" r="7.5" fill="#9c86e6"/>
+<circle cx="41.6167" cy="22.3833" r="5.2" fill="#cdbff7"/>
+<circle cx="32" cy="32" r="15" fill="#ffffff"/>
+<circle cx="32" cy="32" r="13.6" fill="#6f7b99"/>
+<circle cx="27.648" cy="29.008" r="3.536" fill="#5a6582"/>
+<circle cx="36.624" cy="36.08" r="2.584" fill="#5a6582"/>
+<circle cx="34.448" cy="25.2" r="1.632" fill="#5a6582"/>
+<circle cx="41.6167" cy="22.3833" r="3.2" fill="#ffffff"/>
+</g>
+</svg>

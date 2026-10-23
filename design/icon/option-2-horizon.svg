@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs><linearGradient id="sun" x1="32" y1="5" x2="32" y2="59" gradientUnits="userSpaceOnUse">
+ <stop offset="0" stop-color="#6b3fa0"/><stop offset=".38" stop-color="#d9487d"/>
+ <stop offset=".7" stop-color="#ff7a59"/><stop offset="1" stop-color="#ffc46b"/></linearGradient></defs><circle cx="32" cy="32" r="27" fill="url(#sun)"/><clipPath id="c"><circle cx="32" cy="32" r="27"/></clipPath>
+ <g clip-path="url(#c)">
+  <circle cx="32" cy="38" r="12" fill="#fff"/>
+  <rect x="0" y="38" width="64" height="30" fill="#4b2a7b"/>
+  <rect x="21" y="42" width="22" height="2.2" rx="1.1" fill="#fff" opacity=".9"/>
+  <rect x="25" y="47" width="14" height="2.2" rx="1.1" fill="#fff" opacity=".6"/>
+  <rect x="28.5" y="52" width="7" height="2.2" rx="1.1" fill="#fff" opacity=".35"/>
+ </g><path d="M17 16.2Q17 19 19.8 19Q17 19 17 21.8Q17 19 14.2 19Q17 19 17 16.2Z" fill="#fff" opacity="1"/><path d="M46 13Q46 15 48 15Q46 15 46 17Q46 15 44 15Q46 15 46 13Z" fill="#fff" opacity="0.8"/><path d="M50 25.6Q50 27 51.4 27Q50 27 50 28.4Q50 27 48.6 27Q50 27 50 25.6Z" fill="#fff" opacity="0.6"/></svg>

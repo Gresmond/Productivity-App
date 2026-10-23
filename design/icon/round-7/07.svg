@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs><clipPath id="base"><circle cx="32" cy="32" r="27"/></clipPath></defs>
+<g clip-path="url(#base)">
+<circle cx="32" cy="32" r="27" fill="#2c1b5c"/>
+<circle cx="32" cy="32" r="18.5" fill="#6a4fc4"/>
+<circle cx="32" cy="32" r="15" fill="#ffffff"/>
+<circle cx="31" cy="33" r="13.6" fill="#6f7b99"/>
+<circle cx="26.648" cy="30.008" r="3.536" fill="#5a6582"/>
+<circle cx="35.624" cy="37.08" r="2.584" fill="#5a6582"/>
+<circle cx="33.448" cy="26.2" r="1.632" fill="#5a6582"/>
+<path d="M41.90,13.60 Q43.77,20.23 50.40,22.10 Q43.77,23.97 41.90,30.60 Q40.03,23.97 33.40,22.10 Q40.03,20.23 41.90,13.60Z" fill="#ffffff"/>
+</g>
+</svg>

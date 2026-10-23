@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s3_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#26102a"/>
+      <stop offset="100%" stop-color="#120616"/>
+    </linearGradient>
+    <linearGradient id="s3_lobe1" x1="20" y1="20" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#f43f5e"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="url(#s3_bg)"/>
+  <circle cx="32" cy="32" r="19.5" fill="none" stroke="#ff6b5b" stroke-width="1.8" opacity="0.4"/>
+  <g transform="rotate(45 32 32)">
+    <ellipse cx="32" cy="26.5" rx="8" ry="6.2" fill="#f97316" fill-opacity="0.18" stroke="#fed7aa" stroke-width="2.2"/>
+    <ellipse cx="32" cy="37.5" rx="8" ry="6.2" fill="#f43f5e" fill-opacity="0.18" stroke="url(#s3_lobe1)" stroke-width="2.2"/>
+    <ellipse cx="32" cy="32" rx="5" ry="9" fill="none" stroke="#fde047" stroke-width="1.8"/>
+  </g>
+  <circle cx="32" cy="32" r="2.5" fill="#ffffff"/>
+  <circle cx="44.2" cy="19.8" r="2.4" fill="#fed7aa"/>
+  <circle cx="19.8" cy="44.2" r="2.4" fill="#f43f5e"/>
+</svg>

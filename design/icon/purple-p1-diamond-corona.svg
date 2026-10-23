@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Base: deep obsidian purple -->
+  <circle cx="32" cy="32" r="27" fill="#1a122e"/>
+  <!-- Outer faint violet aura -->
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#a855f7" stroke-width="1.6" opacity="0.35"/>
+  <!-- Pure white corona ring -->
+  <circle cx="32" cy="32" r="14.5" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+  <!-- Occulting dark moon -->
+  <circle cx="30.8" cy="33.2" r="13.2" fill="#1a122e"/>
+  <!-- Diamond flare beacon at 45 deg -->
+  <circle cx="42.3" cy="21.7" r="3.4" fill="#ffffff"/>
+</svg>

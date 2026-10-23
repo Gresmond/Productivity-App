@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s1_sun" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffcc5c"/>
+      <stop offset="50%" stop-color="#ff6b5b"/>
+      <stop offset="100%" stop-color="#e2487a"/>
+    </linearGradient>
+  </defs>
+  <!-- Base: deep twilight violet -->
+  <circle cx="32" cy="32" r="27" fill="#201533"/>
+  <!-- Outer faint corona halo -->
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#ff6b5b" stroke-width="1.6" opacity="0.25"/>
+  <!-- Main glowing corona ring -->
+  <circle cx="32" cy="32" r="14.5" fill="none" stroke="url(#s1_sun)" stroke-width="2.6"/>
+  <!-- Occulting moon (slightly offset to emphasize diamond effect) -->
+  <circle cx="30.8" cy="33.2" r="13.2" fill="#201533"/>
+  <!-- Diamond flare at top right (45 deg) -->
+  <circle cx="42.3" cy="21.7" r="3.4" fill="#ffffff"/>
+  <circle cx="42.3" cy="21.7" r="1.8" fill="#ffedd5"/>
+</svg>

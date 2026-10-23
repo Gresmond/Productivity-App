@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="27" fill="#160e28"/>
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#c084fc" stroke-width="2.2" opacity="0.55"/>
+  <circle cx="32" cy="32" r="13.5" fill="none" stroke="#ff6b5b" stroke-width="2.2"/>
+  <!-- Lens pupil -->
+  <g transform="rotate(45 32 32)">
+    <ellipse cx="32" cy="32" rx="4.5" ry="9.5" fill="none" stroke="#ffffff" stroke-width="2.0"/>
+  </g>
+  <circle cx="32" cy="32" r="2.4" fill="#ffffff"/>
+  <circle cx="45.4" cy="18.6" r="2.6" fill="#fed7aa"/>
+</svg>

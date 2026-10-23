@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s3_grad" x1="18" y1="18" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffca4a"/>
+      <stop offset="60%" stop-color="#ff6054"/>
+      <stop offset="100%" stop-color="#c82e78"/>
+    </linearGradient>
+    <mask id="s3_mask">
+      <rect width="64" height="64" fill="#ffffff"/>
+      <circle cx="36" cy="27.5" r="12" fill="#000000"/>
+    </mask>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="#1c1228"/>
+  <!-- Outer orbit track -->
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#ff6054" stroke-width="1.6" opacity="0.3"/>
+  <!-- Crescent sun -->
+  <circle cx="32" cy="32" r="13" fill="url(#s3_grad)" mask="url(#s3_mask)"/>
+  <!-- Corona outline -->
+  <circle cx="32" cy="32" r="13" fill="none" stroke="url(#s3_grad)" stroke-width="1.2" opacity="0.35"/>
+  <!-- Satellite beacon at 45 deg -->
+  <circle cx="44.7" cy="19.3" r="2.6" fill="#ffca4a"/>
+</svg>

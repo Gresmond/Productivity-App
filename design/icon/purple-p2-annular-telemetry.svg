@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Base: deep cosmic violet -->
+  <circle cx="32" cy="32" r="27" fill="#18112b"/>
+  <!-- Outer violet telemetry ring -->
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#a855f7" stroke-width="2.2"/>
+  <!-- Inner pure white corona ring -->
+  <circle cx="32" cy="32" r="13" fill="none" stroke="#ffffff" stroke-width="2.8"/>
+  <!-- Dark center moon -->
+  <circle cx="32" cy="32" r="10" fill="#18112b"/>
+  <!-- White orbital satellite on outer ring at 45 deg -->
+  <circle cx="44.7" cy="19.3" r="2.8" fill="#ffffff"/>
+  <!-- Lavender accent node on inner ring at 225 deg -->
+  <circle cx="22.8" cy="41.2" r="1.8" fill="#c084fc"/>
+</svg>

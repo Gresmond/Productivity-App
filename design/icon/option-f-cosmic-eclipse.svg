@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <mask id="crescent_mask">
+      <rect width="64" height="64" fill="#ffffff"/>
+      <circle cx="36.5" cy="27.5" r="7.5" fill="#000000"/>
+    </mask>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="#131627"/>
+  <!-- Outer orbit ring -->
+  <circle cx="32" cy="32" r="17.5" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+  <!-- Subtle halo outline -->
+  <circle cx="32" cy="32" r="8.5" fill="none" stroke="#ffffff" stroke-width="1.4" opacity="0.25"/>
+  <!-- Crescent planet -->
+  <circle cx="32" cy="32" r="8.5" fill="#ffffff" mask="url(#crescent_mask)"/>
+  <!-- Satellite at 45° -->
+  <circle cx="44.4" cy="19.6" r="2.8" fill="#5b7fff"/>
+</svg>

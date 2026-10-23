@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s4_orbit" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="50%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="#1b0e28"/>
+  <circle cx="32" cy="32" r="18.5" fill="none" stroke="url(#s4_orbit)" stroke-width="2.4"/>
+  <circle cx="32" cy="32" r="13.5" fill="none" stroke="#f43f5e" stroke-width="1.6" opacity="0.45"/>
+  <g transform="rotate(-25 32 32)">
+    <ellipse cx="32" cy="32" rx="6.8" ry="12.8" fill="none" stroke="#fed7aa" stroke-width="2.4"/>
+  </g>
+  <circle cx="32" cy="32" r="3.8" fill="#f97316"/>
+  <circle cx="32" cy="32" r="2.0" fill="#ffffff"/>
+  <circle cx="44.5" cy="19.5" r="2.6" fill="#fde047"/>
+</svg>

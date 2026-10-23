@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs><clipPath id="base"><circle cx="32" cy="32" r="27"/></clipPath></defs>
+<g clip-path="url(#base)">
+<circle cx="32" cy="32" r="27" fill="#15203f"/><circle cx="32" cy="32" r="22" fill="#1f2c55"/>
+<circle cx="14" cy="22" r="0.9" fill="#ffffff"/><circle cx="49" cy="14" r="1.1" fill="#ffffff"/><circle cx="52" cy="44" r="0.9" fill="#ffffff"/><circle cx="17" cy="47" r="0.8" fill="#ffffff"/>
+<polygon points="41.18,9.83 42.61,21.39 54.17,22.82 47.00,32.00 54.17,41.18 42.61,42.61 41.18,54.17 32.00,47.00 22.82,54.17 21.39,42.61 9.83,41.18 17.00,32.00 9.83,22.82 21.39,21.39 22.82,9.83 32.00,17.00" fill="#ff6f91"/>
+<polygon points="32.00,12.00 37.55,18.60 46.14,17.86 45.40,26.45 52.00,32.00 45.40,37.55 46.14,46.14 37.55,45.40 32.00,52.00 26.45,45.40 17.86,46.14 18.60,37.55 12.00,32.00 18.60,26.45 17.86,17.86 26.45,18.60" fill="#ff8f6b"/>
+<circle cx="32" cy="32" r="14.5" fill="#ffffff"/>
+<clipPath id="ml"><circle cx="32" cy="32" r="12.8"/></clipPath>
+<circle cx="32" cy="32" r="12.8" fill="#6c7895"/>
+<g clip-path="url(#ml)" fill="#56617e">
+<circle cx="27.648" cy="29.184" r="3.328" fill="#56617e"/>
+<circle cx="36.352" cy="35.84" r="2.432" fill="#56617e"/>
+<circle cx="34.816" cy="25.856" r="1.536" fill="#56617e"/>
+<circle cx="29.696" cy="39.04" r="1.28" fill="#56617e"/>
+</g>
+</g>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="s1_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#241029"/>
+      <stop offset="100%" stop-color="#120617"/>
+    </linearGradient>
+    <linearGradient id="s1_grad" x1="20" y1="15" x2="44" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fed7aa"/>
+      <stop offset="35%" stop-color="#ff6b5b"/>
+      <stop offset="100%" stop-color="#e2487a"/>
+    </linearGradient>
+    <linearGradient id="s1_gold" x1="20" y1="15" x2="44" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="50%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#f43f5e"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="url(#s1_bg)"/>
+  <circle cx="32" cy="32" r="22.5" fill="none" stroke="#ff6b5b" stroke-width="1.2" opacity="0.25"/>
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#fb923c" stroke-width="1.5" opacity="0.45"/>
+  <g transform="rotate(28 32 32)">
+    <ellipse cx="32" cy="32" rx="7" ry="13.5" fill="#e2487a" fill-opacity="0.12" stroke="url(#s1_grad)" stroke-width="2.4"/>
+  </g>
+  <g transform="rotate(-28 32 32)">
+    <ellipse cx="32" cy="32" rx="7" ry="13.5" fill="#f59e0b" fill-opacity="0.10" stroke="url(#s1_gold)" stroke-width="2.2"/>
+  </g>
+  <circle cx="32" cy="32" r="5.2" fill="none" stroke="#fed7aa" stroke-width="1.4" opacity="0.8"/>
+  <circle cx="32" cy="32" r="2.2" fill="#ffffff"/>
+  <circle cx="43.5" cy="20.5" r="2.0" fill="#fde047"/>
+  <circle cx="20.5" cy="43.5" r="2.0" fill="#fde047"/>
+</svg>

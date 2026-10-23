@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <mask id="p3_mask">
+      <rect width="64" height="64" fill="#ffffff"/>
+      <circle cx="36" cy="27.5" r="12" fill="#000000"/>
+    </mask>
+  </defs>
+  <!-- Base: deep twilight purple -->
+  <circle cx="32" cy="32" r="27" fill="#1c1332"/>
+  <!-- Outer subtle lilac orbit ring -->
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#a855f7" stroke-width="1.6" opacity="0.35"/>
+  <!-- Pure white crescent sun -->
+  <circle cx="32" cy="32" r="13" fill="#ffffff" mask="url(#p3_mask)"/>
+  <!-- Corona outline -->
+  <circle cx="32" cy="32" r="13" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.3"/>
+  <!-- Electric lilac satellite beacon at 45 deg -->
+  <circle cx="44.7" cy="19.3" r="2.6" fill="#c084fc"/>
+</svg>
