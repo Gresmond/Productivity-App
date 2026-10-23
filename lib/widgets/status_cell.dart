@@ -224,6 +224,8 @@ class _NoteDialogState extends State<_NoteDialog> {
                 autofocus: true,
                 maxLines: 3,
                 minLines: 2,
+                // Enter saves; long notes still wrap onto more lines.
+                textInputAction: TextInputAction.done,
                 style: TextStyle(fontFamily: Fonts.body, fontSize: 15, color: p.ink),
                 decoration: InputDecoration(
                   hintText: 'Optional note',

@@ -540,6 +540,32 @@ void main() {
     await gesture.removePointer();
   });
 
+  testWidgets('Enter saves a note', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    await tester.pumpWidget(EclipseApp(state: state));
+    state.showMonth(10);
+    await tester.pumpAndSettle();
+
+    final weights = state.habits.firstWhere((h) => h.name == 'Weights');
+    final day = DateTime(2026, 10, 6);
+    state.cycle(day, weights);
+    state.cycle(day, weights); // next tap is "other", which asks for a note
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byWidgetPredicate((w) => w is StatusCell && w.day == day && w.habit.id == weights.id));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Sore back');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('What happened?'), findsNothing);
+    expect(state.noteOf(day, weights), 'Sore back');
+  });
+
   testWidgets('update banner', (tester) async {
     await _loadFonts();
     tester.view.physicalSize = const Size(1440, 900);

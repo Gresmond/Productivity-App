@@ -377,10 +377,9 @@ class _JournalCardState extends State<_JournalCard> {
               maxLines: null,
               textAlignVertical: TextAlignVertical.top,
               style: TextStyle(
-                fontFamily: Fonts.serif,
-                fontSize: 14.5,
-                height: 1.6,
-                letterSpacing: 0.1,
+                fontFamily: Fonts.body,
+                fontSize: 14,
+                height: 1.35,
                 color: p.ink,
               ),
               decoration: const InputDecoration(
