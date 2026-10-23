@@ -149,7 +149,7 @@ class _Grid extends StatefulWidget {
   State<_Grid> createState() => _GridState();
 }
 
-class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
+class _GridState extends State<_Grid> with TickerProviderStateMixin {
   static const _morph = Duration(milliseconds: 420);
   static const _minCol = 22.0;
   static const _maxCell = 64.0;
@@ -172,12 +172,20 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
   /// Rituals already on screen; any others fade in.
   Set<int> _known = {};
 
+  /// The month the weekend bands are fading from, and the fade into this
+  /// month's bands.
+  (int, int)? _bandsFrom;
+  late final _bands = AnimationController(vsync: this, duration: _morph, value: 1);
+  late final _bandsCurved = CurvedAnimation(parent: _bands, curve: Curves.easeInOutCubic);
+
   @override
   void didUpdateWidget(_Grid old) {
     super.didUpdateWidget(old);
     _known = {for (final h in old.habits) h.id};
     if ((old.year, old.month) == (widget.year, widget.month)) return;
     _previous = (old.year, old.month);
+    _bandsFrom = (old.year, old.month);
+    _bands.forward(from: 0);
     _shown
         .animateTo(daysInMonth(widget.year, widget.month).toDouble(), duration: _morph, curve: Curves.easeInOutCubic)
         .whenCompleteOrCancel(() {
@@ -187,6 +195,8 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _bandsCurved.dispose();
+    _bands.dispose();
     _shown.dispose();
     super.dispose();
   }
@@ -300,6 +310,14 @@ class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
                         painter: _RestBandPainter(
                           layout: layout,
                           weekend: [for (final c in columns) c.day.weekday >= DateTime.saturday],
+                          was: [
+                            for (final c in columns)
+                              if (_bandsFrom case (final y, final m) when c.number <= daysInMonth(y, m))
+                                DateTime(y, m, c.number).weekday >= DateTime.saturday
+                              else
+                                false,
+                          ],
+                          fade: _bandsCurved,
                           color: p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.09 : 0.06),
                         ),
                       ),
@@ -504,16 +522,31 @@ class _HighlightPainter extends CustomPainter {
 /// A soft band down each run of weekend columns, behind the day headers and
 /// squares, marking them as rest days. Follows the columns through a morph.
 class _RestBandPainter extends CustomPainter {
-  _RestBandPainter({required this.layout, required this.weekend, required this.color}) : super(repaint: layout.shown);
+  _RestBandPainter({
+    required this.layout,
+    required this.weekend,
+    required this.was,
+    required this.fade,
+    required this.color,
+  }) : super(repaint: Listenable.merge([layout.shown, fade]));
 
   final _ColumnLayout layout;
 
-  /// Whether each of the layout's columns falls on a weekend.
+  /// Whether each of the layout's columns falls on a weekend, this month
+  /// and in the month being left; [fade] runs from the old bands to these.
   final List<bool> weekend;
+  final List<bool> was;
+  final Animation<double> fade;
   final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
+    final t = fade.value;
+    if (t < 1) _bands(canvas, size, was, color.withValues(alpha: color.a * (1 - t)));
+    if (t > 0) _bands(canvas, size, weekend, color.withValues(alpha: color.a * t));
+  }
+
+  void _bands(Canvas canvas, Size size, List<bool> weekend, Color color) {
     final col = layout.col;
     final paint = Paint()..color = color;
     double? start;
@@ -541,7 +574,11 @@ class _RestBandPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RestBandPainter old) =>
-      old.layout != layout || old.color != color || !listEquals(old.weekend, weekend);
+      old.layout != layout ||
+      old.color != color ||
+      old.fade != fade ||
+      !listEquals(old.weekend, weekend) ||
+      !listEquals(old.was, was);
 }
 
 /// Fades and grows its child in when first built, if [animate].
