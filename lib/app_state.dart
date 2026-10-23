@@ -57,7 +57,8 @@ class AppState extends ChangeNotifier {
 
   /// Brings saved names up to date: version 2 paired the themes light and
   /// dark (the old Sunset was light and is now Sunrise), version 3 dropped
-  /// Citrus. Runs once per database (a restored backup may need it again).
+  /// Citrus, version 4 named the Pastels Morning and Evening. Runs once per
+  /// database (a restored backup may need it again).
   String? _savedTheme() {
     final saved = store.setting('theme');
     final version = int.tryParse(store.setting('themeNames') ?? '') ?? 1;
@@ -75,6 +76,8 @@ class AppState extends ChangeNotifier {
     name = switch (name) {
       'Citrus' => 'Solar Eclipse',
       'Dark Citrus' => 'Lunar Eclipse',
+      'Pastel' => 'Morning Pastel',
+      'Dark Pastel' => 'Evening Pastel',
       final name => name,
     };
     store.setSetting('theme', name);
@@ -82,7 +85,7 @@ class AppState extends ChangeNotifier {
     return name;
   }
 
-  static const _themeNames = 3;
+  static const _themeNames = 4;
 
   void setTheme(String name) {
     themeName = name;

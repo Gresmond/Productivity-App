@@ -17,6 +17,7 @@ import 'package:eclipse/data/updates.dart';
 import 'package:eclipse/main.dart';
 import 'package:eclipse/models.dart';
 import 'package:eclipse/theme/app_theme.dart';
+import 'package:eclipse/theme/oklch.dart';
 import 'package:eclipse/widgets/status_cell.dart';
 
 /// Pass --dart-define=SCREENSHOT_DIR=/some/dir to save PNGs of each view.
@@ -102,10 +103,11 @@ void main() {
         ('Main', 'Solar Eclipse'),
         ('Dark', 'Lunar Eclipse'),
         ('Eclipse', 'Lunar Eclipse'),
-        ('Soft Pastel', 'Pastel'),
+        ('Soft Pastel', 'Morning Pastel'),
         ('Sage & Sunset', 'Solar Eclipse'),
         ('Sunset', 'Sunrise'),
         ('Citrus', 'Solar Eclipse'),
+        ('Pastel', 'Morning Pastel'),
       ]) {
         final store = Store.memory()..setSetting('theme', old);
         expect(AppState(store).themeName, now, reason: old);
@@ -118,7 +120,7 @@ void main() {
 
     test('every theme has a partner of the other brightness', () {
       expect(palettes.map((p) => p.name), [
-        'Solar Eclipse', 'Lunar Eclipse', 'Pastel', 'Dark Pastel',
+        'Solar Eclipse', 'Lunar Eclipse', 'Morning Pastel', 'Evening Pastel',
         'Sunrise', 'Sunset',
       ]);
       for (final p in palettes) {
@@ -126,14 +128,42 @@ void main() {
         expect(partnerOf(p.name, dark: false).brightness, Brightness.light);
       }
       expect(partnerOf('Sunrise', dark: true).name, 'Sunset');
-      expect(partnerOf('Dark Pastel', dark: false).name, 'Pastel');
+      expect(partnerOf('Evening Pastel', dark: false).name, 'Morning Pastel');
+    });
+
+    test('OKLCH round-trips, and keeps out-of-gamut colours in sRGB', () {
+      for (final c in [const Color(0xFF3B66F5), const Color(0xFFE85372), const Color(0xFF808080)]) {
+        final back = Oklch.of(c).toColor();
+        expect(deltaE(c, back), lessThan(1e-4));
+      }
+      final clipped = Oklch.of(const Oklch(0.7, 0.4, 145).toColor());
+      expect(clipped.l, closeTo(0.7, 0.002), reason: 'lightness is kept, chroma gives way');
+      expect(clipped.h, closeTo(145, 2));
+    });
+
+    test('every theme meets the contrast and colour-blind checks', () {
+      for (final p in palettes) {
+        final statuses = [p.done, p.missed, p.other];
+        expect(contrast(p.ink, p.tile), greaterThanOrEqualTo(7), reason: '${p.name} text');
+        expect(contrast(p.inkMuted, p.tile), greaterThanOrEqualTo(4.5), reason: '${p.name} muted text');
+        expect(contrast(p.accent, p.tile), greaterThanOrEqualTo(4.5), reason: '${p.name} accent text');
+        expect(contrast(p.onToday, p.today), greaterThanOrEqualTo(4.5), reason: "${p.name} today's number");
+        for (final c in statuses) {
+          expect(contrast(p.onAccent, c), greaterThanOrEqualTo(3), reason: '${p.name} marks on statuses');
+        }
+        // Done and missed stay apart for every kind of colour blindness.
+        for (final type in ColourBlindness.values) {
+          expect(deltaE(simulate(p.done, type), simulate(p.missed, type)), greaterThanOrEqualTo(0.08),
+              reason: '${p.name} done vs missed, ${type.name}');
+        }
+      }
     });
 
     test('follows night light, and a manual pick holds until it changes', () {
       final store = Store.memory();
-      var state = AppState(store)..setTheme('Pastel');
+      var state = AppState(store)..setTheme('Morning Pastel');
       state.nightLightIs(true);
-      expect(state.themeName, 'Dark Pastel');
+      expect(state.themeName, 'Evening Pastel');
       state.nightLightIs(true);
       state.setTheme('Sunrise');
       state.nightLightIs(true);
@@ -1030,9 +1060,9 @@ void main() {
     expect(find.text('Sunrise'), findsOneWidget);
     expect(find.text('Follow night light'), findsOneWidget);
     await _shoot(tester, 'theme_menu');
-    await tester.tap(find.text('Pastel'));
+    await tester.tap(find.text('Morning Pastel'));
     await tester.pumpAndSettle();
-    expect(state.themeName, 'Pastel');
+    expect(state.themeName, 'Morning Pastel');
 
     await tester.tap(find.byTooltip('Appearance'));
     await tester.pumpAndSettle();

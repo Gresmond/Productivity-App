@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'palette_recipe.dart';
+
 /// Font families registered in pubspec.yaml.
 abstract final class Fonts {
   /// Page titles, card headings and big numbers.
@@ -27,6 +29,7 @@ class Palette extends ThemeExtension<Palette> {
     required this.onAccent,
     required this.gradient,
     required this.today,
+    required this.onToday,
     required this.done,
     required this.missed,
     required this.other,
@@ -58,6 +61,9 @@ class Palette extends ThemeExtension<Palette> {
   /// from the status colours so it never reads as a ticked box.
   final Color today;
 
+  /// The day letter and number drawn on [today].
+  final Color onToday;
+
   /// Habit status colours.
   final Color done;
   final Color missed;
@@ -86,6 +92,7 @@ class Palette extends ThemeExtension<Palette> {
       onAccent: c(onAccent, other.onAccent),
       gradient: [for (var i = 0; i < gradient.length; i++) c(gradient[i], other.gradient[i])],
       today: c(today, other.today),
+      onToday: c(onToday, other.onToday),
       done: c(done, other.done),
       missed: c(missed, other.missed),
       other: c(this.other, other.other),
@@ -95,131 +102,83 @@ class Palette extends ThemeExtension<Palette> {
   }
 }
 
-/// The sun at totality: a black moon on pearl, gold corona and red
-/// prominences, with a twilight indigo.
-const solarEclipsePalette = Palette(
+/// Every theme, generated in OKLCH by [PaletteRecipe]. Each dark theme
+/// shares its light partner's key hue and harmony.
+final solarEclipsePalette = const PaletteRecipe(
   name: 'Solar Eclipse',
   brightness: Brightness.light,
-  background: Color(0xFFF6F3EB),
-  tile: Color(0xFFFFFDF8),
-  tileBorder: Color(0xFFEAE3D3),
-  ink: Color(0xFF15141B),
-  inkMuted: Color(0xFF77705F),
-  accent: Color(0xFFB9801A),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFFE9B43A), Color(0xFFE0723C), Color(0xFFC2375B)],
-  today: Color(0xFF15141B),
-  done: Color(0xFFD9A02A),
-  missed: Color(0xFFC93F5B),
-  other: Color(0xFF4B4F9E),
-  empty: Color(0xFFEFE9DC),
-  shadow: Color(0xFF5A4A28),
-);
+  // Near-colourless cool silver, like the corona.
+  neutralHue: 255,
+  neutralChroma: 0.006,
+  keyHue: 255,
+  statusChroma: 0.085,
+  statusLightness: 0.57,
+  harmony: Harmony.analogous,
+).build();
 
-/// The app icon: a deep violet sky, a slate-blue moon and a white corona.
-const lunarEclipsePalette = Palette(
+final lunarEclipsePalette = const PaletteRecipe(
   name: 'Lunar Eclipse',
   brightness: Brightness.dark,
-  background: Color(0xFF170E33),
-  tile: Color(0xFF22164A),
-  tileBorder: Color(0xFF35286A),
-  ink: Color(0xFFF5F3FC),
-  inkMuted: Color(0xFF9DA4C4),
-  accent: Color(0xFFB7AEF5),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF5B3FC0), Color(0xFF6A62B4), Color(0xFF6F7B99)],
-  today: Color(0xFF5B3FC0),
-  done: Color(0xFF8E9CDB),
-  missed: Color(0xFFD8709F),
-  other: Color(0xFF9C7FEA),
-  empty: Color(0xFF2B1F57),
-  shadow: Color(0xFF000000),
-);
+  // The app icon's deep violet sky.
+  neutralHue: 290,
+  neutralChroma: 0.06,
+  keyHue: 255,
+  statusChroma: 0.12,
+  statusLightness: 0.58,
+  harmony: Harmony.analogous,
+).build();
 
-/// Dreamy lavender mist, lilac and soft rose.
-const pastelPalette = Palette(
-  name: 'Pastel',
+final morningPastelPalette = const PaletteRecipe(
+  name: 'Morning Pastel',
   brightness: Brightness.light,
-  background: Color(0xFFF6F3FC),
-  tile: Color(0xFFFFFFFF),
-  tileBorder: Color(0xFFEAE3F5),
-  ink: Color(0xFF322A4A),
-  inkMuted: Color(0xFF8880A5),
-  accent: Color(0xFF7E6CD9),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF7F9DF2), Color(0xFFAD8DEB), Color(0xFFF08DA8)],
-  today: Color(0xFF7E6CD9),
-  done: Color(0xFF6F93EB),
-  missed: Color(0xFFEB7E9A),
-  other: Color(0xFFA98CE8),
-  empty: Color(0xFFEFE9F8),
-  shadow: Color(0xFF6F5C9E),
-);
+  neutralHue: 300,
+  neutralChroma: 0.018,
+  keyHue: 265,
+  statusChroma: 0.095,
+  statusLightness: 0.78,
+  harmony: Harmony.triadic,
+).build();
 
-/// Pastel at midnight: navy with powder blue, lilac and pink.
-const darkPastelPalette = Palette(
-  name: 'Dark Pastel',
+final eveningPastelPalette = const PaletteRecipe(
+  name: 'Evening Pastel',
   brightness: Brightness.dark,
-  background: Color(0xFF11141E),
-  tile: Color(0xFF1A1F2D),
-  tileBorder: Color(0xFF2A3145),
-  ink: Color(0xFFEEF1FA),
-  inkMuted: Color(0xFF98A1BC),
-  accent: Color(0xFFA3B8F7),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF9DC3F2), Color(0xFFB3A6EE), Color(0xFFF0A9C4)],
-  today: Color(0xFF6E86D6),
-  done: Color(0xFF9DBDF5),
-  missed: Color(0xFFF2A0B6),
-  other: Color(0xFFB9A8F0),
-  empty: Color(0xFF232A3C),
-  shadow: Color(0xFF000000),
-);
+  // Midnight blue.
+  neutralHue: 265,
+  neutralChroma: 0.03,
+  keyHue: 265,
+  statusChroma: 0.09,
+  statusLightness: 0.76,
+  harmony: Harmony.triadic,
+).build();
 
-/// Warm peach blush, coral rose and dusk plum.
-const sunrisePalette = Palette(
+final sunrisePalette = const PaletteRecipe(
   name: 'Sunrise',
   brightness: Brightness.light,
-  background: Color(0xFFFDF2EC),
-  tile: Color(0xFFFFFFFF),
-  tileBorder: Color(0xFFF3DED3),
-  ink: Color(0xFF381F2C),
-  inkMuted: Color(0xFF8E6F7C),
-  accent: Color(0xFFDC4D6B),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFFF28F42), Color(0xFFE54E70), Color(0xFF7A4BAE)],
-  today: Color(0xFF6A4AB0),
-  done: Color(0xFFE86B40),
-  missed: Color(0xFF944F8E),
-  other: Color(0xFFDD6588),
-  empty: Color(0xFFF6E7DE),
-  shadow: Color(0xFF7E3B4B),
-);
+  // Peach.
+  neutralHue: 55,
+  neutralChroma: 0.02,
+  keyHue: 45,
+  statusChroma: 0.15,
+  statusLightness: 0.58,
+  harmony: Harmony.analogous,
+).build();
 
-/// Embers after the sun goes down: burgundy-black, amber and red.
-const sunsetPalette = Palette(
+final sunsetPalette = const PaletteRecipe(
   name: 'Sunset',
   brightness: Brightness.dark,
-  background: Color(0xFF1E0F12),
-  tile: Color(0xFF2B171B),
-  tileBorder: Color(0xFF42252B),
-  ink: Color(0xFFFCEFEA),
-  inkMuted: Color(0xFFBE9A95),
-  accent: Color(0xFFF5874E),
-  onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFFF8B04C), Color(0xFFF06A45), Color(0xFFC23B5A)],
-  today: Color(0xFFC23B5A),
-  done: Color(0xFFF59A48),
-  missed: Color(0xFFB04A78),
-  other: Color(0xFFF07A6A),
-  empty: Color(0xFF381F24),
-  shadow: Color(0xFF000000),
-);
+  // Embers.
+  neutralHue: 25,
+  neutralChroma: 0.035,
+  keyHue: 45,
+  statusChroma: 0.15,
+  statusLightness: 0.58,
+  harmony: Harmony.analogous,
+).build();
 
 /// Each light theme and its dark partner, in menu order.
-const palettePairs = [
+final palettePairs = [
   (solarEclipsePalette, lunarEclipsePalette),
-  (pastelPalette, darkPastelPalette),
+  (morningPastelPalette, eveningPastelPalette),
   (sunrisePalette, sunsetPalette),
 ];
 

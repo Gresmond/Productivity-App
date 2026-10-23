@@ -1049,7 +1049,7 @@ class _DayHeader extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: Fonts.ui,
                             fontSize: 10,
-                            color: Color.lerp(letterFg, p.onAccent, t)!.withValues(alpha: 0.8),
+                            color: Color.lerp(letterFg, p.onToday, t)!.withValues(alpha: 0.8),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1060,7 +1060,7 @@ class _DayHeader extends StatelessWidget {
                         style: TextStyle(
                           fontFamily: Fonts.ui,
                           fontSize: 12.5,
-                          color: Color.lerp(numberFg, p.onAccent, t),
+                          color: Color.lerp(numberFg, p.onToday, t),
                           fontWeight: FontWeight.w600,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
