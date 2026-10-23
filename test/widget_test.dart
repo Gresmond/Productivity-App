@@ -229,6 +229,49 @@ void main() {
     expect(find.text('Stretch'), findsOneWidget);
   });
 
+  testWidgets('switching views and months never shows two at once', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    await tester.pumpWidget(ProductivityApp(state: state));
+    await tester.pumpAndSettle();
+
+    // How visible a widget is, through every fade above it.
+    double opacityOf(Finder f) {
+      var o = 1.0;
+      tester.element(f).visitAncestorElements((e) {
+        final w = e.widget;
+        if (w is FadeTransition) o *= w.opacity.value;
+        return true;
+      });
+      return o;
+    }
+
+    // Steps through a transition, failing if both sides are visible in one frame.
+    Future<void> expectFadeThrough(Finder from, Finder to, String name) async {
+      for (var i = 1; i <= 12; i++) {
+        await tester.pump(const Duration(milliseconds: 25));
+        final a = from.evaluate().isEmpty ? 0.0 : opacityOf(from.first);
+        final b = to.evaluate().isEmpty ? 0.0 : opacityOf(to.last); // the incoming child is built last
+        expect(a == 0 || b == 0, isTrue, reason: '$name frame $i: $a and $b');
+        if (i == 3 || i == 9) await _shoot(tester, '${name}_$i');
+      }
+      await tester.pumpAndSettle();
+    }
+
+    state.showMonth(10);
+    await expectFadeThrough(find.text('Daily rituals'), find.text('31'), 'today_to_month');
+
+    state.showMonth(9); // 30 days, so '31' is only in October's grid
+    await tester.pump();
+    final card = tester.getRect(find.text('Edit rituals'));
+    await expectFadeThrough(find.text('31'), find.text('30'), 'oct_to_sep');
+    expect(tester.getRect(find.text('Edit rituals')), card, reason: 'the card stays put');
+  });
+
   testWidgets('theme switcher, and every theme renders', (tester) async {
     await _loadFonts();
     tester.view.physicalSize = const Size(1440, 900);

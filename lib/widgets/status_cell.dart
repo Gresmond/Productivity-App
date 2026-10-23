@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'fade_through.dart';
 
 /// A single habit-day square. Click to cycle its status.
 class StatusCell extends StatefulWidget {
@@ -28,10 +29,11 @@ class _StatusCellState extends State<StatusCell> {
   bool _pressed = false;
 
   Widget _buildIcon(IconData? icon, double s, Palette p) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      transitionBuilder: (child, anim) =>
-          ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
+    // The old mark leaves before the new one arrives, so a tick and a cross
+    // never overlap mid-change.
+    return FadeThrough(
+      duration: const Duration(milliseconds: 220),
+      scaleFrom: 0.6,
       child: icon == null
           ? (_hover && widget.enabled
               ? Icon(

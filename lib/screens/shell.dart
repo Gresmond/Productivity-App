@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/fade_through.dart';
 import 'month_view.dart';
 import 'today_view.dart';
 
@@ -21,15 +22,13 @@ class Shell extends StatelessWidget {
         children: [
           const _Header(),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              switchInCurve: Curves.easeOutCubic,
+            // Months share one MonthView, which fades only its grid, so the
+            // card stays put when you move between months.
+            child: FadeThrough(
               layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
-              // A plain cross-fade: sliding made every switch bob up and down.
-              transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
               child: month == null
                   ? const TodayView(key: ValueKey('today'))
-                  : MonthView(key: ValueKey('${state.viewYear}-$month'), year: state.viewYear, month: month),
+                  : MonthView(key: const ValueKey('month'), year: state.viewYear, month: month),
             ),
           ),
         ],

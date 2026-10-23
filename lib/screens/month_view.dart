@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/fade_through.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
 
@@ -23,12 +24,40 @@ class _MonthViewState extends State<MonthView> {
   bool _editing = false;
 
   @override
+  void didUpdateWidget(MonthView old) {
+    super.didUpdateWidget(old);
+    if (old.year != widget.year || old.month != widget.month) _editing = false;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
     final (year, month) = (widget.year, widget.month);
     final future = state.isFutureMonth(year, month);
     final habits = state.habitsFor(year, month);
+    final label = future
+        ? 'PREVIEW  ·  COPIES YOUR LATEST RITUALS'
+        : state.isPreviewMonth(year, month)
+            ? 'PREVIEW  ·  SAVED WHEN YOU TICK OR EDIT'
+            : 'RITUALS  ·  ${habits.length}';
+
+    final Widget body;
+    if (_editing) {
+      body = _RitualEditor(year: year, month: month);
+    } else if (habits.isEmpty) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text(
+            'No rituals yet. Add some with Edit rituals.',
+            style: TextStyle(fontFamily: Fonts.body, fontSize: 16, color: p.inkMuted),
+          ),
+        ),
+      );
+    } else {
+      body = _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth);
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
@@ -38,13 +67,15 @@ class _MonthViewState extends State<MonthView> {
           children: [
             Row(
               children: [
-                Text(
-                  future
-                      ? 'PREVIEW  ·  COPIES YOUR LATEST RITUALS'
-                      : state.isPreviewMonth(year, month)
-                          ? 'PREVIEW  ·  SAVED WHEN YOU TICK OR EDIT'
-                          : 'RITUALS  ·  ${habits.length}',
-                  style: TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: p.inkMuted),
+                FadeThrough(
+                  duration: const Duration(milliseconds: 260),
+                  layoutBuilder: (current, previous) =>
+                      Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                  child: Text(
+                    label,
+                    key: ValueKey(label),
+                    style: TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: p.inkMuted),
+                  ),
                 ),
                 const Spacer(),
                 if (!future)
@@ -57,20 +88,18 @@ class _MonthViewState extends State<MonthView> {
               ],
             ),
             const SizedBox(height: 22),
-            if (_editing)
-              _RitualEditor(year: year, month: month)
-            else if (habits.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    'No rituals yet. Add some with Edit rituals.',
-                    style: TextStyle(fontFamily: Fonts.body, fontSize: 16, color: p.inkMuted),
-                  ),
-                ),
-              )
-            else
-              _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth),
+            // The card stays still; only what's inside fades, and its height
+            // eases when the new month has a different number of rituals.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              clipBehavior: Clip.none,
+              child: FadeThrough(
+                layoutBuilder: FadeThrough.sizeToCurrent,
+                child: KeyedSubtree(key: ValueKey((year, month, _editing, habits.isEmpty)), child: body),
+              ),
+            ),
           ],
         ),
       ),
