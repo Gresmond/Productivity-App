@@ -75,23 +75,29 @@ class _Header extends StatelessWidget {
             children: [
               for (final t in [...monthNames, todayTitle])
                 Visibility.maintain(visible: false, child: Text(t, style: titleStyle)),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    kicker.toUpperCase(),
-                    style: TextStyle(
-                      fontFamily: Fonts.ui,
-                      fontSize: 11,
-                      letterSpacing: 2.2,
-                      fontWeight: FontWeight.w700,
-                      color: p.inkMuted.withValues(alpha: 0.8),
+              // Fades with the page below it, rather than snapping first.
+              FadeThrough(
+                layoutBuilder: (current, previous) =>
+                    Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
+                child: Column(
+                  key: ValueKey((kicker, title)),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      kicker.toUpperCase(),
+                      style: TextStyle(
+                        fontFamily: Fonts.ui,
+                        fontSize: 11,
+                        letterSpacing: 2.2,
+                        fontWeight: FontWeight.w700,
+                        color: p.inkMuted.withValues(alpha: 0.8),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(title, style: titleStyle),
-                ],
+                    const SizedBox(height: 3),
+                    Text(title, style: titleStyle),
+                  ],
+                ),
               ),
             ],
           ),
@@ -120,15 +126,10 @@ class _Header extends StatelessWidget {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none,
-                    child: Row(
-                      children: [
+                    child: _TabBar(
+                      selected: month ?? 0,
+                      tabs: [
                         _Tab(label: 'Today', selected: month == null, onTap: state.showToday),
-                        Container(
-                          width: 1,
-                          height: 18,
-                          margin: const EdgeInsets.symmetric(horizontal: 6),
-                          color: p.tileBorder.withValues(alpha: 0.8),
-                        ),
                         for (var m = 1; m <= 12; m++)
                           _Tab(
                             label: monthNames[m - 1].substring(0, 3),
@@ -152,6 +153,97 @@ class _Header extends StatelessWidget {
           const _ThemeButton(),
         ],
       ),
+    );
+  }
+}
+
+/// The tabs in a row, with one highlight pill that glides to the selected
+/// tab instead of each tab lighting up on its own.
+class _TabBar extends StatefulWidget {
+  const _TabBar({required this.tabs, required this.selected});
+
+  /// Today first, then January to December.
+  final List<Widget> tabs;
+
+  /// Index into [tabs].
+  final int selected;
+
+  @override
+  State<_TabBar> createState() => _TabBarState();
+}
+
+class _TabBarState extends State<_TabBar> {
+  final _stackKey = GlobalKey();
+  late final _keys = [for (final _ in widget.tabs) GlobalKey()];
+
+  Rect? _pill;
+  int? _pillFor;
+  bool _glide = false;
+
+  /// Moves the pill under the selected tab once it has been laid out.
+  /// Only a change of tab glides; resizing the window just follows along.
+  void _measure(Duration _) {
+    if (!mounted) return;
+    final stack = _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    final tab = _keys[widget.selected].currentContext?.findRenderObject() as RenderBox?;
+    if (stack == null || tab == null || !tab.hasSize) return;
+    final rect = tab.localToGlobal(Offset.zero, ancestor: stack) & tab.size;
+    if (rect == _pill) return;
+    setState(() {
+      _glide = _pillFor != null && _pillFor != widget.selected;
+      _pillFor = widget.selected;
+      _pill = rect;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    WidgetsBinding.instance.addPostFrameCallback(_measure);
+    final pill = _pill;
+
+    return Stack(
+      key: _stackKey,
+      children: [
+        if (pill != null)
+          AnimatedPositioned(
+            duration: _glide ? const Duration(milliseconds: 420) : Duration.zero,
+            curve: Curves.easeInOutCubic,
+            left: pill.left,
+            top: pill.top,
+            width: pill.width,
+            height: pill.height,
+            // A rounded rect, not a StadiumBorder: Impeller on Linux draws
+            // shape paths without anti-aliasing, but rounded rects smoothly.
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                gradient: LinearGradient(colors: p.gradient),
+                boxShadow: [
+                  BoxShadow(
+                    color: p.gradient[1].withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            for (final (i, tab) in widget.tabs.indexed) ...[
+              KeyedSubtree(key: _keys[i], child: tab),
+              if (i == 0)
+                Container(
+                  width: 1,
+                  height: 18,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  color: p.tileBorder.withValues(alpha: 0.8),
+                ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }
@@ -192,6 +284,8 @@ class _TabState extends State<_Tab> {
     TextStyle style(FontWeight weight) =>
         TextStyle(fontFamily: Fonts.ui, fontSize: 12.5, fontWeight: weight, color: fg, letterSpacing: 0.2);
 
+    // The selected background is the bar's gliding pill; a tab only draws
+    // its hover shade, and its text colour eases as the pill arrives.
     return Padding(
       padding: const EdgeInsets.only(right: 2),
       child: MouseRegion(
@@ -200,32 +294,25 @@ class _TabState extends State<_Tab> {
         onExit: (_) => setState(() => _hover = false),
         child: GestureDetector(
           onTap: widget.onTap,
-          // A rounded rect, not a StadiumBorder: Impeller on Linux draws
-          // shape paths without anti-aliasing, but rounded rects smoothly.
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(30),
-              gradient: selected ? LinearGradient(colors: p.gradient) : null,
-              color: selected ? null : (_hover ? p.empty : Colors.transparent),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: p.gradient[1].withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : null,
+              color: !selected && _hover ? p.empty : p.empty.withValues(alpha: 0),
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
                 // Reserves the bold width, so selecting a tab never resizes the bar.
                 Visibility.maintain(visible: false, child: Text(widget.label, style: style(FontWeight.w600))),
-                Text(widget.label, style: style(selected || widget.isCurrent ? FontWeight.w600 : FontWeight.w500)),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 360),
+                  curve: Curves.easeInOutCubic,
+                  style: style(selected || widget.isCurrent ? FontWeight.w600 : FontWeight.w500),
+                  child: Text(widget.label),
+                ),
               ],
             ),
           ),

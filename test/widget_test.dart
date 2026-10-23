@@ -4,14 +4,17 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:eclipse/app_state.dart';
 import 'package:eclipse/data/backups.dart';
+import 'package:eclipse/data/journal_files.dart';
 import 'package:eclipse/data/store.dart';
 import 'package:eclipse/main.dart';
 import 'package:eclipse/models.dart';
 import 'package:eclipse/theme/app_theme.dart';
+import 'package:eclipse/widgets/status_cell.dart';
 
 /// Pass --dart-define=SCREENSHOT_DIR=/some/dir to save PNGs of each view.
 const _shotDir = String.fromEnvironment('SCREENSHOT_DIR');
@@ -85,6 +88,43 @@ void main() {
       expect(state.todos[TodoScope.week]!.map((t) => t.text), ['Book dentist']);
       expect(state.journalOf(day), 'A good day.');
       expect(state.themeName, 'Sunset');
+      store.close();
+    });
+  });
+
+  group('journal files', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('productivity_journal'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('entries are Markdown files, and old ones are exported once', () {
+      final store = Store.open('${dir.path}/app.db');
+      store.setJournal('2026-10-01', 'Written before files.');
+      final files = JournalFiles(Directory('${dir.path}/Eclipse Journal'));
+      final day = DateTime(2026, 10, 23);
+      var state = AppState(store, journalFiles: files, clock: () => day);
+
+      final old = File('${dir.path}/Eclipse Journal/2026/2026-10-01.md');
+      expect(old.readAsStringSync(), '# Thursday 1 October 2026\n\nWritten before files.\n');
+
+      state.setJournal(day, 'Line one\n\nLine two');
+      final file = File('${dir.path}/Eclipse Journal/2026/2026-10-23.md');
+      expect(file.readAsStringSync(), '# Friday 23 October 2026\n\nLine one\n\nLine two\n');
+      expect(state.journalOf(day), 'Line one\n\nLine two');
+      expect(store.journal('2026-10-23'), 'Line one\n\nLine two', reason: 'kept in the database for backups');
+
+      // Edited outside the app: the file wins.
+      file.writeAsStringSync('# Friday 23 October 2026\n\nEdited in a text editor\n');
+      expect(state.journalOf(day), 'Edited in a text editor');
+
+      // A deleted file stays deleted.
+      old.deleteSync();
+      state = AppState(store, journalFiles: files, clock: () => day);
+      expect(old.existsSync(), isFalse);
+      expect(state.journalOf(DateTime(2026, 10, 1)), '');
+
+      state.setJournal(day, '  ');
+      expect(file.existsSync(), isFalse, reason: 'an emptied entry leaves no file');
       store.close();
     });
   });
@@ -371,14 +411,18 @@ void main() {
       return o;
     }
 
-    // Steps through a transition, failing if both sides are visible in one frame.
+    // Steps through a transition, failing if both sides show at any real
+    // strength in one frame, or if either side jumps rather than eases.
     Future<void> expectFadeThrough(Finder from, Finder to, String name) async {
-      for (var i = 1; i <= 12; i++) {
+      var (lastA, lastB) = (1.0, 0.0);
+      for (var i = 1; i <= 18; i++) {
         await tester.pump(const Duration(milliseconds: 25));
         final a = from.evaluate().isEmpty ? 0.0 : opacityOf(from.first);
         final b = to.evaluate().isEmpty ? 0.0 : opacityOf(to.last); // the incoming child is built last
-        expect(a == 0 || b == 0, isTrue, reason: '$name frame $i: $a and $b');
-        if (i == 3 || i == 9) await _shoot(tester, '${name}_$i');
+        expect(a < 0.05 || b < 0.05, isTrue, reason: '$name frame $i: $a and $b');
+        expect(lastA - a < 0.25 && b - lastB < 0.25, isTrue, reason: '$name frame $i jumps: $lastA -> $a, $lastB -> $b');
+        (lastA, lastB) = (a, b);
+        if (i == 5 || i == 12) await _shoot(tester, '${name}_$i');
       }
       await tester.pumpAndSettle();
     }
@@ -386,11 +430,62 @@ void main() {
     state.showMonth(10);
     await expectFadeThrough(find.text('Daily rituals'), find.text('31'), 'today_to_month');
 
-    state.showMonth(9); // 30 days, so '31' is only in October's grid
+    // Between months the grid stays and morphs: September has 30 days, so
+    // October's 31st column closes up while everything else stays visible.
+    state.showMonth(9);
     await tester.pump();
     final card = tester.getRect(find.text('Edit rituals'));
-    await expectFadeThrough(find.text('31'), find.text('30'), 'oct_to_sep');
+    final first = find.text('1').first;
+    var lastX = tester.getRect(find.text('30')).left;
+    for (var i = 1; i <= 18; i++) {
+      await tester.pump(const Duration(milliseconds: 25));
+      expect(opacityOf(first), 1, reason: 'the grid never fades between months');
+      final x = tester.getRect(find.text('30')).left;
+      expect(x >= lastX && x - lastX < 6, isTrue, reason: 'columns spread smoothly: $lastX -> $x');
+      lastX = x;
+      if (i == 8) await _shoot(tester, 'oct_to_sep_8');
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('31'), findsNothing);
     expect(tester.getRect(find.text('Edit rituals')), card, reason: 'the card stays put');
+  });
+
+  testWidgets('right-click clears a square, and the hover only covers squares', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    await tester.pumpWidget(EclipseApp(state: state));
+    state.showMonth(10);
+    await tester.pumpAndSettle();
+
+    final weights = state.habits.firstWhere((h) => h.name == 'Weights');
+    final day = DateTime(2026, 10, 5);
+    state.cycle(day, weights);
+    state.cycle(day, weights); // not done
+    state.setNote(day, weights, 'Rest day');
+    await tester.pumpAndSettle();
+
+    final square = find.byWidgetPredicate((w) => w is StatusCell && w.day == day && w.habit.id == weights.id);
+    await tester.tap(square, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(state.statusOf(day, weights), HabitStatus.none);
+    expect(state.noteOf(day, weights), isNull);
+
+    // Right-clicking a blank or future square does nothing.
+    await tester.tap(square, buttons: kSecondaryButton);
+    final future = find.byWidgetPredicate((w) => w is StatusCell && w.day == DateTime(2026, 10, 30));
+    await tester.tap(future.first, buttons: kSecondaryButton, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(state.statusOf(day, weights), HabitStatus.none);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: tester.getCenter(square));
+    await tester.pumpAndSettle();
+    await _shoot(tester, 'row_hover');
+    await gesture.removePointer();
   });
 
   testWidgets('theme switcher, and every theme renders', (tester) async {

@@ -4,8 +4,12 @@ A desktop habit tracker and to-do planner, built with Flutter.
 
 - **Today**: daily rituals with streaks, plus today / this week / this month to-dos and a journal.
 - **Months**: the full ritual-by-day grid for any month, with per-month ritual lists.
-- Five colour themes. Everything is stored locally in SQLite
+- Six colour themes. Everything is stored locally in SQLite
   (`~/.local/share/dev.nicholas.productivity_app/productivity.db` on Linux).
+- The journal is saved as one Markdown file per day in
+  `~/Documents/Eclipse Journal/<year>/`, readable without the app. (The
+  database keeps a copy for backups, but restoring a backup leaves these
+  files alone.)
 
 ## Installing on a Mac
 
@@ -25,7 +29,10 @@ linux/install.sh
 ```
 
 This builds the app and adds **Eclipse** to your app launcher, with its icon.
-Run it again to update after pulling new code.
+
+**Updating:** there is no automatic update on Linux. The app is built from
+this folder, so after new code lands here, run `linux/install.sh` again and
+then quit and reopen Eclipse.
 
 ## Building from source
 

@@ -252,6 +252,10 @@ class Store {
 
   // Journal
 
+  Iterable<({String day, String text})> journalEntries() => _db
+      .select('SELECT day, text FROM journal ORDER BY day')
+      .map((r) => (day: r['day'] as String, text: r['text'] as String));
+
   String journal(String day) {
     final r = _db.select('SELECT text FROM journal WHERE day = ?', [day]);
     return r.isEmpty ? '' : r.first['text'] as String;

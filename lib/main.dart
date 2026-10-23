@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app_state.dart';
 import 'data/backups.dart';
+import 'data/journal_files.dart';
 import 'data/store.dart';
 import 'screens/shell.dart';
 import 'theme/app_theme.dart';
@@ -20,6 +21,8 @@ Future<void> main() async {
     Store.open(p.join(dir.path, 'productivity.db')),
     // ~/.local/share/dev.nicholas.productivity_app/backups/
     backups: Backups(Directory(p.join(dir.path, 'backups'))),
+    // ~/Documents/Eclipse Journal/
+    journalFiles: JournalFiles(Directory(p.join((await getApplicationDocumentsDirectory()).path, 'Eclipse Journal'))),
   );
 
   // Picks up midnight (and waking from sleep) to roll the day over.

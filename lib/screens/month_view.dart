@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../app_state.dart';
 import '../models.dart';
@@ -78,18 +79,28 @@ class _MonthViewState extends State<MonthView> {
                   ),
                 ),
                 const Spacer(),
-                if (!future)
-                  _PillButton(
-                    label: _editing ? 'Done' : 'Edit rituals',
-                    icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
-                    filled: _editing,
-                    onTap: () => setState(() => _editing = !_editing),
+                // Kept in place for future months, just faded, so the header
+                // row doesn't change height between months.
+                IgnorePointer(
+                  ignoring: future,
+                  child: AnimatedOpacity(
+                    opacity: future ? 0 : 1,
+                    duration: const Duration(milliseconds: 420),
+                    curve: Curves.easeInOutCubic,
+                    child: _PillButton(
+                      label: _editing ? 'Done' : 'Edit rituals',
+                      icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
+                      filled: _editing,
+                      onTap: () => setState(() => _editing = !_editing),
+                    ),
                   ),
+                ),
               ],
             ),
             const SizedBox(height: 22),
-            // The card stays still; only what's inside fades, and its height
-            // eases when the new month has a different number of rituals.
+            // The card stays still. Moving between months morphs the grid in
+            // place (see [_Grid]); only switching to the editor fades. The
+            // height eases when the new month has a different number of rituals.
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOutCubic,
@@ -97,7 +108,7 @@ class _MonthViewState extends State<MonthView> {
               clipBehavior: Clip.none,
               child: FadeThrough(
                 layoutBuilder: FadeThrough.sizeToCurrent,
-                child: KeyedSubtree(key: ValueKey((year, month, _editing, habits.isEmpty)), child: body),
+                child: KeyedSubtree(key: ValueKey((_editing, habits.isEmpty)), child: body),
               ),
             ),
           ],
@@ -107,7 +118,14 @@ class _MonthViewState extends State<MonthView> {
   }
 }
 
-class _Grid extends StatelessWidget {
+/// Stays on screen from month to month and morphs: columns spread or close
+/// up to the new number of days, squares ease to their new colours, and a
+/// ritual new to this month fades in.
+///
+/// The morph is paint-only: each square is laid out once per change and
+/// then just drawn at a new place each frame (see [_ColumnsDelegate]), so
+/// even a 14 x 31 grid moves at the display's full frame rate.
+class _Grid extends StatefulWidget {
   const _Grid({required this.year, required this.month, required this.habits, required this.nameWidth});
 
   final int year;
@@ -116,15 +134,65 @@ class _Grid extends StatelessWidget {
   final double nameWidth;
 
   @override
+  State<_Grid> createState() => _GridState();
+}
+
+class _GridState extends State<_Grid> with SingleTickerProviderStateMixin {
+  static const _morph = Duration(milliseconds: 420);
+  static const _minCol = 22.0;
+
+  /// How many day columns are showing, easing between whole numbers. Column
+  /// d is (shown - d + 1) of a column wide, between none and all of one.
+  late final _shown = AnimationController.unbounded(
+    vsync: this,
+    value: daysInMonth(widget.year, widget.month).toDouble(),
+  );
+
+  /// The month shown before this one: columns it had that this month lacks
+  /// keep showing its days while they close up.
+  (int, int)? _previous;
+
+  /// Rituals already on screen; any others fade in.
+  Set<int> _known = {};
+
+  @override
+  void didUpdateWidget(_Grid old) {
+    super.didUpdateWidget(old);
+    _known = {for (final h in old.habits) h.id};
+    if ((old.year, old.month) == (widget.year, widget.month)) return;
+    _previous = (old.year, old.month);
+    _shown
+        .animateTo(daysInMonth(widget.year, widget.month).toDouble(), duration: _morph, curve: Curves.easeInOutCubic)
+        .whenCompleteOrCancel(() {
+          if (mounted && _shown.value == daysInMonth(widget.year, widget.month)) setState(() => _previous = null);
+        });
+  }
+
+  @override
+  void dispose() {
+    _shown.dispose();
+    super.dispose();
+  }
+
+  /// The date in column [d] (1-based), or null when there is no column d.
+  DateTime? _dayAt(int d) {
+    if (d <= daysInMonth(widget.year, widget.month)) return DateTime(widget.year, widget.month, d);
+    final prev = _previous;
+    if (prev == null || d > daysInMonth(prev.$1, prev.$2)) return null;
+    return DateTime(prev.$1, prev.$2, d);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    final days = [for (var d = 1; d <= daysInMonth(year, month); d++) DateTime(year, month, d)];
+    final (year, month, habits, nameWidth) = (widget.year, widget.month, widget.habits, widget.nameWidth);
+    final dayCount = daysInMonth(year, month);
 
     var done = 0, logged = 0;
-    for (final day in days) {
+    for (var d = 1; d <= dayCount; d++) {
       for (final h in habits) {
-        final s = state.statusOf(day, h);
+        final s = state.statusOf(DateTime(year, month, d), h);
         if (s != HabitStatus.none) logged++;
         if (s == HabitStatus.done) done++;
       }
@@ -132,33 +200,67 @@ class _Grid extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final totalDays = days.length;
-        const minCol = 22.0;
-        final minGridWidth = nameWidth + totalDays * minCol;
-        final needsScroll = constraints.maxWidth < minGridWidth;
+        double gridWidth(double days) => (nameWidth + days * _minCol).clamp(constraints.maxWidth, double.infinity);
+        double colFor(double days) => ((gridWidth(days) - nameWidth) / days).clamp(20.0, 40.0);
+        final width = gridWidth(dayCount.toDouble());
 
-        final availableWidth = needsScroll ? minGridWidth : constraints.maxWidth;
-        final col = ((availableWidth - nameWidth) / totalDays).clamp(20.0, 40.0);
-        final cell = col - 6;
+        // Squares take the new month's size straight away and ease to it
+        // themselves; only their places animate.
+        final cell = colFor(dayCount.toDouble()) - 6;
+        final columns = [
+          for (var d = 1; d <= 31; d++)
+            if (_dayAt(d) case final day?) (number: d, day: day, leaving: d > dayCount),
+        ];
+        final layout = _ColumnLayout(shown: _shown, colFor: colFor, days: [for (final c in columns) c.number]);
 
         Widget grid = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                SizedBox(width: nameWidth),
-                for (final day in days) _DayHeader(day: day, width: col, isToday: day == state.today),
-              ],
+            // The headers are a plain row of 31 boxes, cheap enough to lay
+            // out each frame, so their width follows the columns'.
+            AnimatedBuilder(
+              animation: _shown,
+              builder: (context, _) {
+                final shown = _shown.value;
+                final col = colFor(shown);
+                return Row(
+                  children: [
+                    SizedBox(width: nameWidth),
+                    for (final c in columns)
+                      if (shown > c.number - 1)
+                        _Column(
+                          width: col * (shown - c.number + 1).clamp(0.0, 1.0),
+                          full: col,
+                          child: _DayHeader(day: c.day, isToday: c.day == state.today),
+                        ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 10),
             for (final h in habits)
-              _MonthHabitRow(
-                habit: h,
-                days: days,
-                nameWidth: nameWidth,
-                colWidth: col,
-                cellSize: cell,
-                today: state.today,
+              _FadeIn(
+                key: ValueKey(h.id),
+                animate: _known.isNotEmpty && !_known.contains(h.id),
+                child: _MonthHabitRow(
+                  habit: h,
+                  nameWidth: nameWidth,
+                  cellSize: cell,
+                  layout: layout,
+                  clickableDays: columns.where((c) => !c.leaving && !c.day.isAfter(state.today)).length,
+                  cells: [
+                    for (final c in columns)
+                      IgnorePointer(
+                        ignoring: c.leaving,
+                        child: StatusCell(
+                          day: c.day,
+                          habit: h,
+                          size: cell,
+                          enabled: !c.leaving && !c.day.isAfter(state.today),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             const SizedBox(height: 26),
             Row(
@@ -167,8 +269,11 @@ class _Grid extends StatelessWidget {
                 _Legend(color: p.missed, label: 'Not done', icon: Icons.close_rounded),
                 _Legend(color: p.other, label: 'Other', icon: Icons.remove_rounded),
                 const Spacer(),
-                if (logged > 0)
-                  Container(
+                AnimatedOpacity(
+                  opacity: logged > 0 ? 1 : 0,
+                  duration: _morph,
+                  curve: Curves.easeInOutCubic,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: p.empty.withValues(alpha: 0.55),
@@ -178,13 +283,19 @@ class _Grid extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '${(done * 100 / logged).round()}%',
-                          style: TextStyle(
-                            fontFamily: Fonts.display,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: p.ink,
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(end: logged == 0 ? 0 : done * 100 / logged),
+                          duration: _morph,
+                          curve: Curves.easeInOutCubic,
+                          builder: (context, percent, _) => Text(
+                            '${percent.round()}%',
+                            style: TextStyle(
+                              fontFamily: Fonts.display,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: p.ink,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -200,23 +311,181 @@ class _Grid extends StatelessWidget {
                       ],
                     ),
                   ),
+                ),
               ],
             ),
           ],
         );
 
-        if (needsScroll) {
-          return SingleChildScrollView(
+        if (width > constraints.maxWidth) {
+          grid = SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: minGridWidth,
-              child: grid,
-            ),
+            child: SizedBox(width: width, child: grid),
           );
         }
-
         return grid;
       },
+    );
+  }
+}
+
+/// Where the day columns are at this moment of a morph.
+class _ColumnLayout {
+  const _ColumnLayout({required this.shown, required this.colFor, required this.days});
+
+  final Animation<double> shown;
+
+  /// Column width for a (fractional) number of columns.
+  final double Function(double days) colFor;
+
+  /// The day number (1-31) of each column, in order.
+  final List<int> days;
+
+  double get col => colFor(shown.value);
+
+  /// How much of column [d] is showing, 0 to 1.
+  double fraction(int d) => (shown.value - d + 1).clamp(0.0, 1.0);
+}
+
+/// One day's header box at [width], drawn at its [full] width and clipped,
+/// so a column closing up hides its header rather than squashing it.
+class _Column extends StatelessWidget {
+  const _Column({required this.width, required this.full, required this.child});
+
+  final double width;
+  final double full;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = width / full;
+    return SizedBox(
+      width: width,
+      child: ClipRect(
+        clipBehavior: fraction < 1 ? Clip.hardEdge : Clip.none,
+        child: OverflowBox(
+          alignment: Alignment.centerLeft,
+          minWidth: full,
+          maxWidth: full,
+          fit: OverflowBoxFit.deferToChild,
+          child: Opacity(opacity: Curves.easeIn.transform(fraction.clamp(0.0, 1.0)), child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// Draws one row's squares in their columns. Laid out once; each frame of
+/// a morph only moves them, so nothing is rebuilt or measured again.
+class _ColumnsDelegate extends FlowDelegate {
+  _ColumnsDelegate(this.layout, this.height) : super(repaint: layout.shown);
+
+  final _ColumnLayout layout;
+  final double height;
+
+  @override
+  Size getSize(BoxConstraints constraints) => Size(constraints.maxWidth, height);
+
+  // The same loose box every time, so a square never needs laying out
+  // again while its column moves.
+  @override
+  BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
+      BoxConstraints.loose(const Size.square(40));
+
+  @override
+  void paintChildren(FlowPaintingContext context) {
+    final col = layout.col;
+    for (var i = 0; i < context.childCount; i++) {
+      final d = layout.days[i];
+      final fraction = layout.fraction(d);
+      if (fraction == 0) continue;
+      final size = context.getChildSize(i)!;
+      context.paintChild(
+        i,
+        transform: Matrix4.translationValues(
+          (d - 1) * col + (col - size.width) / 2,
+          (height - size.height) / 2,
+          0,
+        ),
+        opacity: Curves.easeIn.transform(fraction),
+      );
+    }
+  }
+
+  @override
+  bool shouldRelayout(_ColumnsDelegate old) => old.height != height;
+
+  @override
+  bool shouldRepaint(_ColumnsDelegate old) => true;
+}
+
+/// The hover highlight behind a row's squares, from the first square to
+/// the last one that can be clicked, following the columns as they move.
+class _HighlightPainter extends CustomPainter {
+  _HighlightPainter({
+    required this.layout,
+    required this.clickableDays,
+    required this.cellSize,
+    required this.color,
+  }) : super(repaint: layout.shown);
+
+  static const pad = 3.0;
+
+  final _ColumnLayout layout;
+  final int clickableDays;
+  final double cellSize;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (clickableDays == 0) return;
+    final col = layout.col;
+    final inset = (col - cellSize) / 2;
+    final clickable = clickableDays.clamp(0, layout.shown.value) * col;
+    final rect = Rect.fromLTWH(inset - pad, 0, clickable - 2 * inset + 2 * pad, size.height);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, Radius.circular(cellSize * 0.28 + pad)),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HighlightPainter old) =>
+      old.clickableDays != clickableDays || old.cellSize != cellSize || old.color != color || old.layout != layout;
+}
+
+/// Fades and grows its child in when first built, if [animate].
+class _FadeIn extends StatefulWidget {
+  const _FadeIn({super.key, required this.animate, required this.child});
+
+  final bool animate;
+  final Widget child;
+
+  @override
+  State<_FadeIn> createState() => _FadeInState();
+}
+
+class _FadeInState extends State<_FadeIn> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+    value: widget.animate ? 0 : 1,
+  )..forward();
+  late final _curved = CurvedAnimation(parent: _controller, curve: Curves.easeInOutCubic);
+
+  @override
+  void dispose() {
+    _curved.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: _curved,
+      alignment: Alignment.topCenter,
+      child: FadeTransition(opacity: _curved, child: widget.child),
     );
   }
 }
@@ -224,19 +493,23 @@ class _Grid extends StatelessWidget {
 class _MonthHabitRow extends StatefulWidget {
   const _MonthHabitRow({
     required this.habit,
-    required this.days,
+    required this.cells,
+    required this.layout,
+    required this.clickableDays,
     required this.nameWidth,
-    required this.colWidth,
     required this.cellSize,
-    required this.today,
   });
 
   final Habit habit;
-  final List<DateTime> days;
+
+  /// This ritual's square in each column of [layout].
+  final List<Widget> cells;
+  final _ColumnLayout layout;
+
+  /// How many squares, from the first, can be clicked (days after today can't).
+  final int clickableDays;
   final double nameWidth;
-  final double colWidth;
   final double cellSize;
-  final DateTime today;
 
   @override
   State<_MonthHabitRow> createState() => _MonthHabitRowState();
@@ -248,49 +521,62 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(vertical: 2.5),
-        decoration: BoxDecoration(
-          color: _hover ? p.empty.withValues(alpha: 0.35) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: widget.nameWidth,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Text(
-                  widget.habit.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: Fonts.body,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: p.ink,
-                  ),
-                ),
+    const pad = _HighlightPainter.pad;
+    final height = widget.cellSize + 5;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: widget.nameWidth,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Text(
+              widget.habit.name,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: Fonts.body,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: p.ink,
               ),
             ),
-            for (final day in widget.days)
-              SizedBox(
-                width: widget.colWidth,
-                child: Center(
-                  child: StatusCell(
-                    day: day,
-                    habit: widget.habit,
-                    size: widget.cellSize,
-                    enabled: !day.isAfter(widget.today),
+          ),
+        ),
+        // Only the squares light up on hover, not the ritual's name.
+        Expanded(
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hover = true),
+            onExit: (_) => setState(() => _hover = false),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  top: 2.5 - pad + 1,
+                  bottom: 2.5 - pad + 1,
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: _hover ? 1 : 0,
+                      duration: const Duration(milliseconds: 140),
+                      child: CustomPaint(
+                        painter: _HighlightPainter(
+                          layout: widget.layout,
+                          clickableDays: widget.clickableDays,
+                          cellSize: widget.cellSize,
+                          color: p.empty.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-          ],
+                Flow(
+                  delegate: _ColumnsDelegate(widget.layout, height),
+                  clipBehavior: Clip.none,
+                  children: widget.cells,
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -504,55 +790,68 @@ class _PillButton extends StatelessWidget {
 }
 
 class _DayHeader extends StatelessWidget {
-  const _DayHeader({required this.day, required this.width, required this.isToday});
+  const _DayHeader({required this.day, required this.isToday});
 
   final DateTime day;
-  final double width;
   final bool isToday;
+
+  static const _morph = Duration(milliseconds: 420);
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final weekend = day.weekday >= DateTime.saturday;
     final fg = isToday ? p.onAccent : (weekend ? p.other : p.inkMuted);
-    return SizedBox(
-      width: width,
+    final letter = weekdayNames[day.weekday - 1][0];
+    // Fills its column (less a small gap), so it follows the column's
+    // width through a morph without being rebuilt.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Center(
         child: RepaintBoundary(
-          child: Container(
-            width: width - 4,
+          // Each column keeps its day number from month to month; only the
+          // weekday letter and the today marker change, and both ease.
+          child: AnimatedContainer(
+            duration: _morph,
+            curve: Curves.easeInOutCubic,
+            width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: isToday
-                ? BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: p.gradient.take(2).toList(),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: p.gradient.first.withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  )
-                : null,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [for (final c in p.gradient.take(2)) isToday ? c : c.withValues(alpha: 0)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: p.gradient.first.withValues(alpha: isToday ? 0.35 : 0),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
             child: Column(
               children: [
-                Text(
-                  weekdayNames[day.weekday - 1][0],
-                  style: TextStyle(
-                    fontFamily: Fonts.ui,
-                    fontSize: 10,
-                    color: fg.withValues(alpha: 0.8),
-                    fontWeight: FontWeight.w600,
+                FadeThrough(
+                  duration: _morph,
+                  child: AnimatedDefaultTextStyle(
+                    key: ValueKey(letter),
+                    duration: _morph,
+                    curve: Curves.easeInOutCubic,
+                    style: TextStyle(
+                      fontFamily: Fonts.ui,
+                      fontSize: 10,
+                      color: fg.withValues(alpha: 0.8),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    child: Text(letter),
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  '${day.day}',
+                AnimatedDefaultTextStyle(
+                  duration: _morph,
+                  curve: Curves.easeInOutCubic,
                   style: TextStyle(
                     fontFamily: Fonts.ui,
                     fontSize: 12.5,
@@ -560,6 +859,7 @@ class _DayHeader extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
+                  child: Text('${day.day}'),
                 ),
               ],
             ),

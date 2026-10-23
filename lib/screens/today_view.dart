@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
@@ -316,7 +318,10 @@ class _JournalCardState extends State<_JournalCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const TileHeader(title: 'Journal'),
+          TileHeader(
+            title: 'Journal',
+            trailing: state.journalFiles == null ? null : _OpenFolderButton(state.journalFiles!.fileFor(state.today)),
+          ),
           const SizedBox(height: 6),
           Expanded(
             child: TextField(
@@ -338,6 +343,39 @@ class _JournalCardState extends State<_JournalCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Shows the journal's folder in the file manager. Each day is a Markdown
+/// file there, so entries can be read and kept without the app.
+class _OpenFolderButton extends StatelessWidget {
+  const _OpenFolderButton(this.file);
+
+  final File file;
+
+  Future<void> _open() async {
+    final folder = file.parent;
+    await folder.create(recursive: true);
+    await Process.run(Platform.isMacOS ? 'open' : 'xdg-open', [folder.path]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final home = Platform.environment['HOME'];
+    final shown = home != null && file.path.startsWith(home) ? '~${file.path.substring(home.length)}' : file.path;
+    return Tooltip(
+      message: 'Saved as $shown\nClick to open the folder',
+      child: IconButton(
+        // Small enough not to make this card's header taller than the others.
+        constraints: BoxConstraints.tight(const Size.square(24)),
+        padding: EdgeInsets.zero,
+        iconSize: 16,
+        color: p.inkMuted.withValues(alpha: 0.8),
+        onPressed: _open,
+        icon: const Icon(Icons.folder_open_rounded),
       ),
     );
   }

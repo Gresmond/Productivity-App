@@ -5,7 +5,8 @@ import '../models.dart';
 import '../theme/app_theme.dart';
 import 'fade_through.dart';
 
-/// A single habit-day square. Click to cycle its status.
+/// A single habit-day square. Click to cycle its status; right-click to
+/// clear it.
 class StatusCell extends StatefulWidget {
   const StatusCell({
     super.key,
@@ -25,8 +26,13 @@ class StatusCell extends StatefulWidget {
 }
 
 class _StatusCellState extends State<StatusCell> {
+  static const _base = 34.0;
+
   bool _hover = false;
   bool _pressed = false;
+
+  // Keeps the square's animations alive when a note's tooltip comes or goes.
+  final _squareKey = GlobalKey();
 
   Widget _buildIcon(IconData? icon, double s, Palette p) {
     // The old mark leaves before the new one arrives, so a tick and a cross
@@ -53,7 +59,11 @@ class _StatusCellState extends State<StatusCell> {
     final state = AppScope.of(context);
     final status = state.statusOf(widget.day, widget.habit);
     final note = state.noteOf(widget.day, widget.habit);
-    final s = widget.size;
+    // Drawn at one size and scaled to [widget.size], so a square that
+    // changes size (the month grid's columns differ by month) doesn't
+    // restart its colour animation, or redo it for every square at once.
+    const s = _base;
+    final enabled = widget.enabled;
 
     final (Color? base, IconData? icon) = switch (status) {
       HabitStatus.none => (null, null),
@@ -67,7 +77,7 @@ class _StatusCellState extends State<StatusCell> {
     final decoration = BoxDecoration(
       borderRadius: borderRadius,
       color: base == null
-          ? (_hover && widget.enabled
+          ? (_hover && enabled
               ? p.empty.withValues(alpha: 0.9)
               : p.empty.withValues(alpha: 0.55))
           : null,
@@ -80,7 +90,7 @@ class _StatusCellState extends State<StatusCell> {
             ),
       border: base == null
           ? Border.all(
-              color: _hover && widget.enabled
+              color: _hover && enabled
                   ? p.accent.withValues(alpha: 0.35)
                   : p.tileBorder.withValues(alpha: 0.7),
               width: 1.0,
@@ -101,17 +111,23 @@ class _StatusCellState extends State<StatusCell> {
     );
 
     Widget cell = RepaintBoundary(
+      key: _squareKey,
       child: AnimatedScale(
-        scale: _pressed ? 0.91 : (_hover && widget.enabled ? 1.04 : 1.0),
+        scale: _pressed ? 0.91 : (_hover && enabled ? 1.04 : 1.0),
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          width: s,
-          height: s,
-          decoration: decoration,
-          child: _buildIcon(icon, s, p),
+        child: SizedBox.square(
+          dimension: widget.size,
+          child: FittedBox(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              width: s,
+              height: s,
+              decoration: decoration,
+              child: _buildIcon(icon, s, p),
+            ),
+          ),
         ),
       ),
     );
@@ -120,23 +136,27 @@ class _StatusCellState extends State<StatusCell> {
       cell = Tooltip(message: note, child: cell);
     }
 
-    if (!widget.enabled) {
-      return Opacity(opacity: 0.35, child: cell);
-    }
-
+    // The same widgets whether enabled or not, so a square that becomes a
+    // future day (when the month changes) fades instead of jumping.
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() {
         _hover = false;
         _pressed = false;
       }),
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: () => cycleStatus(context, state, widget.day, widget.habit),
-        child: cell,
+        onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+        onTap: enabled ? () => cycleStatus(context, state, widget.day, widget.habit) : null,
+        onSecondaryTap: enabled && status != HabitStatus.none ? () => state.clear(widget.day, widget.habit) : null,
+        child: AnimatedOpacity(
+          opacity: enabled ? 1 : 0.35,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeInOutCubic,
+          child: cell,
+        ),
       ),
     );
   }

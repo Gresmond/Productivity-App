@@ -1,17 +1,19 @@
 import 'package:flutter/widgets.dart';
 
 import 'data/backups.dart';
+import 'data/journal_files.dart';
 import 'data/store.dart';
 import 'models.dart';
 
 /// App state backed by [Store]. Keeps habit entries and the current to-do
 /// lists in memory and writes every change straight to SQLite.
 class AppState extends ChangeNotifier {
-  AppState(this.store, {this.backups, DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
+  AppState(this.store, {this.backups, this.journalFiles, DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
     today = dateOnly(_clock());
     viewYear = today.year;
     if (store.isEmpty) _seed();
     _backUp();
+    _exportJournal();
     _load();
   }
 
@@ -19,6 +21,10 @@ class AppState extends ChangeNotifier {
 
   /// Null where nothing should be written to disk (tests).
   final Backups? backups;
+
+  /// Where the journal lives as documents; null keeps it in the database
+  /// only (tests).
+  final JournalFiles? journalFiles;
   final DateTime Function() _clock;
 
   late DateTime today;
@@ -217,6 +223,15 @@ class AppState extends ChangeNotifier {
     return next;
   }
 
+  /// Back to blank, whatever the mark was.
+  void clear(DateTime day, Habit h) {
+    final key = _cell(day, h);
+    if (_status.remove(key) == null) return;
+    _notes.remove(key);
+    store.setEntry(dateKey(day), h.id, HabitStatus.none);
+    notifyListeners();
+  }
+
   void setNote(DateTime day, Habit h, String note) {
     final key = _cell(day, h);
     final trimmed = note.trim();
@@ -290,9 +305,34 @@ class AppState extends ChangeNotifier {
 
   // Journal
 
-  String journalOf(DateTime day) => store.journal(dateKey(day));
+  String journalOf(DateTime day) => journalFiles?.read(day) ?? store.journal(dateKey(day));
 
-  void setJournal(DateTime day, String text) => store.setJournal(dateKey(day), text);
+  void setJournal(DateTime day, String text) {
+    store.setJournal(dateKey(day), text);
+    try {
+      journalFiles?.write(day, text);
+    } catch (e) {
+      // The database still has it, and the next keystroke tries again.
+      debugPrint('Saving journal file failed: $e');
+    }
+  }
+
+  /// Once: writes entries from before the journal moved to documents out as
+  /// files. Never overwrites a file, and never runs again, so deleting a
+  /// file in the folder doesn't bring it back.
+  void _exportJournal() {
+    final files = journalFiles;
+    if (files == null || store.setting('journalExported') != null) return;
+    try {
+      for (final e in store.journalEntries()) {
+        final day = DateTime.parse(e.day);
+        if (!files.has(day)) files.write(day, e.text);
+      }
+      store.setSetting('journalExported', '1');
+    } catch (e) {
+      debugPrint('Exporting journal failed: $e');
+    }
+  }
 
   /// First run: the ritual list, 1 October and the to-dos from the spreadsheet.
   void _seed() {
