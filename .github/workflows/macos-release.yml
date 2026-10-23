@@ -30,7 +30,19 @@ jobs:
         run: |
           echo "$FONTS_PASSPHRASE" | gpg --batch --quiet --passphrase-fd 0 -d fonts.tar.gz.gpg | tar -xzf -
 
-      - run: flutter build macos --release
+      # On failure, repeat the error lines and the end of the output as
+      # annotations, which (unlike the log) are visible without signing in.
+      - name: Build app
+        run: |
+          set -o pipefail
+          if ! flutter build macos --release 2>&1 | tee build.log; then
+            grep -iE 'error|failed' build.log | head -n 8 | while IFS= read -r line; do
+              echo "::error title=Build error::${line}"
+            done
+            tail -n 60 build.log | awk '{ printf "%s%%0A", $0 }' | sed 's/^/::error title=End of build output::/'
+            echo
+            exit 1
+          fi
 
       # A disk image with the app next to an Applications shortcut, so
       # installing is a single drag.
