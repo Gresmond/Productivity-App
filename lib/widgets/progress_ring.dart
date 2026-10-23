@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// Gradient arc showing how many of today's habits are done. When the last
-/// one is ticked, the closed ring is washed in the done colour from the top
-/// while it gives a small bounce, and stays that colour until one is unticked.
+/// one is ticked, the arc's tip runs on through the top without stopping and
+/// carries the done colour round a second lap, the ring bouncing as it lands,
+/// and stays that colour until one is unticked.
 class ProgressRing extends StatefulWidget {
   const ProgressRing({super.key, required this.done, required this.total, this.size = 92});
 
@@ -21,15 +22,18 @@ class ProgressRing extends StatefulWidget {
 }
 
 class _ProgressRingState extends State<ProgressRing> with TickerProviderStateMixin {
-  /// The celebration: the arc closes over the first half, then the wash and
-  /// bounce play over the second.
+  /// The celebration: one crest that closes the arc and then, without
+  /// pausing at the top, sweeps the done colour round.
   late final _celebrate = AnimationController(vsync: this, duration: Motion.morph * 2);
+
+  /// The arc as last painted, and where it was when the celebration began.
+  double _shown = 0;
+  double _from = 1;
 
   /// How strongly the done colour shows; eases out when one is unticked.
   late final _solid = AnimationController(vsync: this, duration: Motion.click);
 
-  static const _wash = Interval(0.5, 0.95, curve: Curves.easeInOutCubic);
-  static const _bounce = Interval(0.5, 1.0, curve: Curves.easeInOutSine);
+  static const _bounce = Interval(0.55, 1.0, curve: Curves.easeInOutSine);
 
   @override
   void initState() {
@@ -46,6 +50,7 @@ class _ProgressRingState extends State<ProgressRing> with TickerProviderStateMix
     super.didUpdateWidget(old);
     if (widget.complete == old.complete) return;
     if (widget.complete) {
+      _from = _shown;
       _solid.value = 1;
       _celebrate.forward(from: 0);
     } else {
@@ -91,13 +96,20 @@ class _ProgressRingState extends State<ProgressRing> with TickerProviderStateMix
         child: label,
         builder: (context, label) {
           final t = _celebrate.value;
+          // The crest's distance travelled: the rest of the arc, then a full
+          // lap of wash, eased as a single journey.
+          final rest = 1 - _from;
+          final crest = (rest + 1) * Motion.morphCurve.transform(t);
+          final arc = widget.complete ? math.min(_from + crest, 1.0) : value;
+          final wash = (crest - rest).clamp(0.0, 1.0);
+          _shown = arc;
           final bump = math.sin(math.pi * _bounce.transform(t));
           return Transform.scale(
             scale: 1 + 0.07 * bump,
             child: SizedBox.square(
               dimension: size,
               child: CustomPaint(
-                painter: _RingPainter(value, p, wash: _wash.transform(t), solid: _solid.value, flare: bump),
+                painter: _RingPainter(arc, p, wash: wash, solid: _solid.value, flare: bump),
                 child: label,
               ),
             ),
