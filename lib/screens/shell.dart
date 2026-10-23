@@ -454,8 +454,9 @@ class _BackupsButton extends StatelessWidget {
 class _ThemeButton extends StatelessWidget {
   const _ThemeButton();
 
-  /// The menu value of the rest-weekends item; the others are theme names.
+  /// Menu values of the switches; the others are theme names.
   static const _restWeekends = '#restWeekends';
+  static const _followNightLight = '#followNightLight';
 
   @override
   Widget build(BuildContext context) {
@@ -473,8 +474,11 @@ class _ThemeButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: p.tileBorder),
       ),
-      onSelected: (value) =>
-          value == _restWeekends ? state.setRestWeekends(!state.restWeekends) : state.setTheme(value),
+      onSelected: (value) => switch (value) {
+        _restWeekends => state.setRestWeekends(!state.restWeekends),
+        _followNightLight => state.setFollowNightLight(!state.followNightLight),
+        _ => state.setTheme(value),
+      },
       itemBuilder: (_) => [
         for (final option in palettes)
           PopupMenuItem(
@@ -509,32 +513,23 @@ class _ThemeButton extends StatelessWidget {
               ],
             ),
           ),
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          value: _restWeekends,
-          height: 60,
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Weekends as rest days',
-                      style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "Greyed out. A blank one won't break a streak.",
-                      style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.inkMuted),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              _Toggle(on: state.restWeekends),
-            ],
+        if (state.nightLightAvailable) ...[
+          const PopupMenuDivider(),
+          _switchItem(
+            p,
+            value: _followNightLight,
+            title: 'Follow night light',
+            subtitle: 'Its dark partner while night light is on.',
+            on: state.followNightLight,
           ),
+        ],
+        const PopupMenuDivider(),
+        _switchItem(
+          p,
+          value: _restWeekends,
+          title: 'Weekends as rest days',
+          subtitle: "Greyed out. A blank one won't break a streak.",
+          on: state.restWeekends,
         ),
         const PopupMenuDivider(),
         const _DayStartEntry(),
@@ -554,6 +549,36 @@ class _ThemeButton extends StatelessWidget {
           ],
         ),
         child: _Swatch(palette: p, size: 36),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _switchItem(Palette p,
+      {required String value, required String title, required String subtitle, required bool on}) {
+    return PopupMenuItem(
+      value: value,
+      height: 60,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.inkMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _Toggle(on: on),
+        ],
       ),
     );
   }

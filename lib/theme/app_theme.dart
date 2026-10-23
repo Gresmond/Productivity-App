@@ -95,49 +95,50 @@ class Palette extends ThemeExtension<Palette> {
   }
 }
 
-/// Blues, reds and purples on luminous white cards.
-const mainPalette = Palette(
-  name: 'Main',
+/// The sun at totality: a black moon on pearl, gold corona and red
+/// prominences, with a twilight indigo.
+const solarEclipsePalette = Palette(
+  name: 'Solar Eclipse',
   brightness: Brightness.light,
-  background: Color(0xFFF0F4FA),
-  tile: Color(0xFFFFFFFF),
-  tileBorder: Color(0xFFE1E8F2),
-  ink: Color(0xFF191D34),
-  inkMuted: Color(0xFF63708D),
-  accent: Color(0xFF405BF0),
+  background: Color(0xFFF6F3EB),
+  tile: Color(0xFFFFFDF8),
+  tileBorder: Color(0xFFEAE3D3),
+  ink: Color(0xFF15141B),
+  inkMuted: Color(0xFF77705F),
+  accent: Color(0xFFB9801A),
   onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF3256ED), Color(0xFF6C4EE8), Color(0xFFD44B74)],
-  today: Color(0xFF2F3A78),
-  done: Color(0xFF3B66F5),
-  missed: Color(0xFFE85372),
-  other: Color(0xFF8E6FE6),
-  empty: Color(0xFFEDF2F9),
-  shadow: Color(0xFF283868),
+  gradient: [Color(0xFFE9B43A), Color(0xFFE0723C), Color(0xFFC2375B)],
+  today: Color(0xFF15141B),
+  done: Color(0xFFD9A02A),
+  missed: Color(0xFFC93F5B),
+  other: Color(0xFF4B4F9E),
+  empty: Color(0xFFEFE9DC),
+  shadow: Color(0xFF5A4A28),
 );
 
-/// The Main palette at night: deep obsidian navy with luminescent accents.
-const darkPalette = Palette(
-  name: 'Dark',
+/// The app icon: a deep violet sky, a slate-blue moon and a white corona.
+const lunarEclipsePalette = Palette(
+  name: 'Lunar Eclipse',
   brightness: Brightness.dark,
-  background: Color(0xFF0D101E),
-  tile: Color(0xFF161A2B),
-  tileBorder: Color(0xFF262C46),
-  ink: Color(0xFFF1F4FD),
-  inkMuted: Color(0xFF8B95B8),
-  accent: Color(0xFF8298FF),
+  background: Color(0xFF170E33),
+  tile: Color(0xFF22164A),
+  tileBorder: Color(0xFF35286A),
+  ink: Color(0xFFF5F3FC),
+  inkMuted: Color(0xFF9DA4C4),
+  accent: Color(0xFFB7AEF5),
   onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF4F6EF0), Color(0xFF8E62F0), Color(0xFFF0668C)],
-  today: Color(0xFF4552A6),
-  done: Color(0xFF5B7FFF),
-  missed: Color(0xFFF05D82),
-  other: Color(0xFFA582F7),
-  empty: Color(0xFF20263E),
+  gradient: [Color(0xFF5B3FC0), Color(0xFF6A62B4), Color(0xFF6F7B99)],
+  today: Color(0xFF5B3FC0),
+  done: Color(0xFF8E9CDB),
+  missed: Color(0xFFD8709F),
+  other: Color(0xFF9C7FEA),
+  empty: Color(0xFF2B1F57),
   shadow: Color(0xFF000000),
 );
 
 /// Dreamy lavender mist, lilac and soft rose.
 const pastelPalette = Palette(
-  name: 'Soft Pastel',
+  name: 'Pastel',
   brightness: Brightness.light,
   background: Color(0xFFF6F3FC),
   tile: Color(0xFFFFFFFF),
@@ -153,6 +154,26 @@ const pastelPalette = Palette(
   other: Color(0xFFA98CE8),
   empty: Color(0xFFEFE9F8),
   shadow: Color(0xFF6F5C9E),
+);
+
+/// Pastel at midnight: navy with powder blue, lilac and pink.
+const darkPastelPalette = Palette(
+  name: 'Dark Pastel',
+  brightness: Brightness.dark,
+  background: Color(0xFF11141E),
+  tile: Color(0xFF1A1F2D),
+  tileBorder: Color(0xFF2A3145),
+  ink: Color(0xFFEEF1FA),
+  inkMuted: Color(0xFF98A1BC),
+  accent: Color(0xFFA3B8F7),
+  onAccent: Color(0xFFFFFFFF),
+  gradient: [Color(0xFF9DC3F2), Color(0xFFB3A6EE), Color(0xFFF0A9C4)],
+  today: Color(0xFF6E86D6),
+  done: Color(0xFF9DBDF5),
+  missed: Color(0xFFF2A0B6),
+  other: Color(0xFFB9A8F0),
+  empty: Color(0xFF232A3C),
+  shadow: Color(0xFF000000),
 );
 
 /// Earthy Nordic sage with citrus amber and terracotta.
@@ -175,9 +196,29 @@ const citrusPalette = Palette(
   shadow: Color(0xFF394A36),
 );
 
+/// Citrus after dark: warm charcoal with olive, mustard and terracotta.
+const darkCitrusPalette = Palette(
+  name: 'Dark Citrus',
+  brightness: Brightness.dark,
+  background: Color(0xFF161612),
+  tile: Color(0xFF20201A),
+  tileBorder: Color(0xFF33332A),
+  ink: Color(0xFFF3F1E6),
+  inkMuted: Color(0xFFA4A28E),
+  accent: Color(0xFFC9B458),
+  onAccent: Color(0xFFFFFFFF),
+  gradient: [Color(0xFF8FA65A), Color(0xFFE6B04E), Color(0xFFE0714F)],
+  today: Color(0xFF6E8A4E),
+  done: Color(0xFF94AE5E),
+  missed: Color(0xFFE27556),
+  other: Color(0xFFEBB64C),
+  empty: Color(0xFF2A2A22),
+  shadow: Color(0xFF000000),
+);
+
 /// Warm peach blush, coral rose and dusk plum.
-const sunsetPalette = Palette(
-  name: 'Sunset',
+const sunrisePalette = Palette(
+  name: 'Sunrise',
   brightness: Brightness.light,
   background: Color(0xFFFDF2EC),
   tile: Color(0xFFFFFFFF),
@@ -195,34 +236,49 @@ const sunsetPalette = Palette(
   shadow: Color(0xFF7E3B4B),
 );
 
-/// The app icon: a deep violet sky, a slate-blue moon and a white corona.
-const eclipsePalette = Palette(
-  name: 'Eclipse',
+/// Embers after the sun goes down: burgundy-black, amber and red.
+const sunsetPalette = Palette(
+  name: 'Sunset',
   brightness: Brightness.dark,
-  background: Color(0xFF170E33),
-  tile: Color(0xFF22164A),
-  tileBorder: Color(0xFF35286A),
-  ink: Color(0xFFF5F3FC),
-  inkMuted: Color(0xFF9DA4C4),
-  accent: Color(0xFFB7AEF5),
+  background: Color(0xFF1E0F12),
+  tile: Color(0xFF2B171B),
+  tileBorder: Color(0xFF42252B),
+  ink: Color(0xFFFCEFEA),
+  inkMuted: Color(0xFFBE9A95),
+  accent: Color(0xFFF5874E),
   onAccent: Color(0xFFFFFFFF),
-  gradient: [Color(0xFF5B3FC0), Color(0xFF6A62B4), Color(0xFF6F7B99)],
-  today: Color(0xFF5B3FC0),
-  done: Color(0xFF8E9CDB),
-  missed: Color(0xFFD8709F),
-  other: Color(0xFF9C7FEA),
-  empty: Color(0xFF2B1F57),
+  gradient: [Color(0xFFF8B04C), Color(0xFFF06A45), Color(0xFFC23B5A)],
+  today: Color(0xFFC23B5A),
+  done: Color(0xFFF59A48),
+  missed: Color(0xFFB04A78),
+  other: Color(0xFFF07A6A),
+  empty: Color(0xFF381F24),
   shadow: Color(0xFF000000),
 );
 
-const palettes = [mainPalette, darkPalette, pastelPalette, citrusPalette, sunsetPalette, eclipsePalette];
+/// Each light theme and its dark partner, in menu order.
+const palettePairs = [
+  (solarEclipsePalette, lunarEclipsePalette),
+  (pastelPalette, darkPastelPalette),
+  (citrusPalette, darkCitrusPalette),
+  (sunrisePalette, sunsetPalette),
+];
+
+final palettes = [for (final (light, dark) in palettePairs) ...[light, dark]];
+
+/// The light or dark theme of [name]'s pair.
+Palette partnerOf(String? name, {required bool dark}) {
+  final p = paletteNamed(name);
+  final pair = palettePairs.firstWhere((pair) => pair.$1 == p || pair.$2 == p);
+  return dark ? pair.$2 : pair.$1;
+}
 
 Palette paletteNamed(String? name) =>
-    palettes.firstWhere((p) => p.name == name, orElse: () => mainPalette);
+    palettes.firstWhere((p) => p.name == name, orElse: () => solarEclipsePalette);
 
 final _themes = {for (final p in palettes) p.name: buildTheme(p)};
 
-/// The cached ThemeData for a palette name (Main when unknown).
+/// The cached ThemeData for a palette name (Solar Eclipse when unknown).
 ThemeData themeNamed(String? name) => _themes[paletteNamed(name).name]!;
 
 ThemeData buildTheme(Palette p) {

@@ -4,6 +4,7 @@ import 'data/backups.dart';
 import 'data/journal_files.dart';
 import 'data/store.dart';
 import 'models.dart';
+import 'theme/app_theme.dart';
 
 /// App state backed by [Store]. Keeps habit entries and the current to-do
 /// lists in memory and writes every change straight to SQLite.
@@ -54,17 +55,63 @@ class AppState extends ChangeNotifier {
   late String? themeName = _savedTheme();
   late final ValueNotifier<String?> themeNotifier = ValueNotifier(themeName);
 
-  // Sage & Sunset was renamed Citrus.
-  String? _savedTheme() => switch (store.setting('theme')) {
-        'Sage & Sunset' => 'Citrus',
-        final name => name,
-      };
+  /// Brings names from before the light/dark pairs up to date. The old
+  /// Sunset was light and is now Sunrise, so this runs only once per
+  /// database (a restored backup may need it again).
+  String? _savedTheme() {
+    final saved = store.setting('theme');
+    if (saved == null || store.setting('themeNames') == '2') return saved;
+    final name = switch (saved) {
+      'Main' => 'Solar Eclipse',
+      'Dark' || 'Eclipse' => 'Lunar Eclipse',
+      'Soft Pastel' => 'Pastel',
+      'Sage & Sunset' => 'Citrus',
+      'Sunset' => 'Sunrise',
+      final name => name,
+    };
+    store.setSetting('theme', name);
+    store.setSetting('themeNames', '2');
+    return name;
+  }
 
   void setTheme(String name) {
     themeName = name;
     themeNotifier.value = name;
     store.setSetting('theme', name);
+    store.setSetting('themeNames', '2');
     notifyListeners();
+  }
+
+  /// True where night light can be read (a Hyprland session); the menu
+  /// hides the switch otherwise.
+  bool nightLightAvailable = false;
+
+  /// Switch to the dark partner when night light comes on, and back when it
+  /// goes off. A theme picked in between holds until the next change.
+  late bool followNightLight = store.setting('followNightLight') != '0';
+
+  /// Night light as last seen, kept across restarts so a change while the
+  /// app was closed still switches, but a restart alone doesn't.
+  late bool? _nightLight = switch (store.setting('nightLight')) { '1' => true, '0' => false, _ => null };
+
+  void setFollowNightLight(bool follow) {
+    followNightLight = follow;
+    store.setSetting('followNightLight', follow ? '1' : '0');
+    if (follow && _nightLight != null) _matchNightLight(_nightLight!);
+    notifyListeners();
+  }
+
+  /// Call with each reading of night light.
+  void nightLightIs(bool on) {
+    if (on == _nightLight) return;
+    _nightLight = on;
+    store.setSetting('nightLight', on ? '1' : '0');
+    if (followNightLight) _matchNightLight(on);
+  }
+
+  void _matchNightLight(bool on) {
+    final name = partnerOf(themeName, dark: on).name;
+    if (name != themeName) setTheme(name);
   }
 
   /// Weekends shown greyed as rest days. A blank rest day doesn't break a
@@ -135,6 +182,7 @@ class AppState extends ChangeNotifier {
     themeName = _savedTheme();
     themeNotifier.value = themeName;
     restWeekends = store.setting('restWeekends') == '1';
+    followNightLight = store.setting('followNightLight') != '0';
     dayStartHour = int.tryParse(store.setting('dayStartHour') ?? '') ?? 0;
     sleepHabits = store.sleepHabits();
     _streaks.clear();

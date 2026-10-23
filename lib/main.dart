@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app_state.dart';
 import 'data/backups.dart';
 import 'data/journal_files.dart';
+import 'data/night_light.dart';
 import 'data/store.dart';
 import 'data/system_time_zone.dart';
 import 'data/updates.dart';
@@ -30,6 +31,7 @@ Future<void> main() async {
   );
 
   _watchDate(state);
+  _watchNightLight(state);
 
   // Only when installed by linux/install.sh: watches its folder for newer commits.
   final updater = Updater.forExecutable(Platform.resolvedExecutable, onRestart: () async => state.store.close());
@@ -67,6 +69,22 @@ void _watchDate(AppState state) {
   }
 
   schedule();
+  AppLifecycleListener(onResume: check, onShow: check);
+}
+
+/// Mirrors night light into [AppState]: hyprsunset can't announce a
+/// change, so it's asked every few seconds and whenever the window comes back.
+void _watchNightLight(AppState state) {
+  final nightLight = NightLight.forSession();
+  if (nightLight == null) return;
+  state.nightLightAvailable = true;
+  Future<void> check() async {
+    final on = await nightLight.isOn();
+    if (on != null) state.nightLightIs(on);
+  }
+
+  unawaited(check());
+  Timer.periodic(const Duration(seconds: 5), (_) => check());
   AppLifecycleListener(onResume: check, onShow: check);
 }
 

@@ -11,6 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:eclipse/app_state.dart';
 import 'package:eclipse/data/backups.dart';
 import 'package:eclipse/data/journal_files.dart';
+import 'package:eclipse/data/night_light.dart';
 import 'package:eclipse/data/store.dart';
 import 'package:eclipse/data/updates.dart';
 import 'package:eclipse/main.dart';
@@ -92,6 +93,90 @@ void main() {
       expect(state.journalOf(day), 'A good day.');
       expect(state.themeName, 'Sunset');
       store.close();
+    });
+  });
+
+  group('themes', () {
+    test('old theme names move to the new ones once', () {
+      for (final (old, now) in [
+        ('Main', 'Solar Eclipse'),
+        ('Dark', 'Lunar Eclipse'),
+        ('Eclipse', 'Lunar Eclipse'),
+        ('Soft Pastel', 'Pastel'),
+        ('Sage & Sunset', 'Citrus'),
+        ('Sunset', 'Sunrise'),
+        ('Citrus', 'Citrus'),
+      ]) {
+        final store = Store.memory()..setSetting('theme', old);
+        expect(AppState(store).themeName, now, reason: old);
+        // The new dark Sunset is kept once the names are current.
+        store.setSetting('theme', 'Sunset');
+        expect(AppState(store).themeName, 'Sunset');
+        store.close();
+      }
+    });
+
+    test('every theme has a partner of the other brightness', () {
+      expect(palettes.map((p) => p.name), [
+        'Solar Eclipse', 'Lunar Eclipse', 'Pastel', 'Dark Pastel',
+        'Citrus', 'Dark Citrus', 'Sunrise', 'Sunset',
+      ]);
+      for (final p in palettes) {
+        expect(partnerOf(p.name, dark: true).brightness, Brightness.dark);
+        expect(partnerOf(p.name, dark: false).brightness, Brightness.light);
+      }
+      expect(partnerOf('Sunrise', dark: true).name, 'Sunset');
+      expect(partnerOf('Dark Citrus', dark: false).name, 'Citrus');
+    });
+
+    test('follows night light, and a manual pick holds until it changes', () {
+      final store = Store.memory();
+      var state = AppState(store)..setTheme('Pastel');
+      state.nightLightIs(true);
+      expect(state.themeName, 'Dark Pastel');
+      state.nightLightIs(true);
+      state.setTheme('Citrus');
+      state.nightLightIs(true);
+      expect(state.themeName, 'Citrus', reason: 'held until night light changes');
+      state.nightLightIs(false);
+      expect(state.themeName, 'Citrus');
+
+      // A restart alone doesn't switch; a change while closed does.
+      state = AppState(store)..nightLightIs(false);
+      expect(state.themeName, 'Citrus');
+      state = AppState(store)..nightLightIs(true);
+      expect(state.themeName, 'Dark Citrus');
+
+      state.setFollowNightLight(false);
+      state.nightLightIs(false);
+      expect(state.themeName, 'Dark Citrus');
+      state.setFollowNightLight(true);
+      expect(state.themeName, 'Citrus', reason: 'turning it on matches night light now');
+      expect(AppState(store).followNightLight, isTrue);
+      store.close();
+    });
+
+    test('reads night light from the hyprsunset socket', () async {
+      final dir = Directory.systemTemp.createTempSync('night_light');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/.hyprsunset.sock';
+      var temperature = '2371';
+      final server = await ServerSocket.bind(InternetAddress(path, type: InternetAddressType.unix), 0);
+      addTearDown(server.close);
+      server.listen((client) {
+        client.listen((request) {
+          expect(utf8.decode(request), 'temperature');
+          client
+            ..write(temperature)
+            ..close();
+        });
+      });
+
+      final nightLight = NightLight(path);
+      expect(await nightLight.isOn(), isTrue);
+      temperature = '6000';
+      expect(await nightLight.isOn(), isFalse);
+      expect(await NightLight('${dir.path}/missing.sock').isOn(), isNull);
     });
   });
 
@@ -939,13 +1024,15 @@ void main() {
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
+    state.nightLightAvailable = true;
     await tester.tap(find.byTooltip('Appearance'));
     await tester.pumpAndSettle();
     expect(find.text('Citrus'), findsOneWidget);
+    expect(find.text('Follow night light'), findsOneWidget);
     await _shoot(tester, 'theme_menu');
-    await tester.tap(find.text('Soft Pastel'));
+    await tester.tap(find.text('Pastel'));
     await tester.pumpAndSettle();
-    expect(state.themeName, 'Soft Pastel');
+    expect(state.themeName, 'Pastel');
 
     await tester.tap(find.byTooltip('Appearance'));
     await tester.pumpAndSettle();

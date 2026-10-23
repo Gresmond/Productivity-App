@@ -4,7 +4,8 @@ A desktop habit tracker and to-do planner, built with Flutter.
 
 - **Today**: daily rituals with streaks, plus today / this week / this month to-dos and a journal.
 - **Months**: the full ritual-by-day grid for any month, with per-month ritual lists.
-- Six colour themes. Everything is stored locally in SQLite
+- Eight colour themes in light/dark pairs. On Hyprland it can follow night
+  light, switching to the dark partner while it's on. Everything is stored locally in SQLite
   (`~/.local/share/dev.nicholas.productivity_app/productivity.db` on Linux).
 - The journal is saved as one Markdown file per day in
   `~/Documents/Eclipse Journal/<year>/`, readable without the app. (The
