@@ -1,0 +1,305 @@
+import 'package:flutter/widgets.dart';
+
+import 'data/store.dart';
+import 'models.dart';
+
+/// App state backed by [Store]. Keeps habit entries and the current to-do
+/// lists in memory and writes every change straight to SQLite.
+class AppState extends ChangeNotifier {
+  AppState(this.store, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
+    today = dateOnly(_clock());
+    viewYear = today.year;
+    if (store.isEmpty) _seed();
+    for (final e in store.entries()) {
+      final key = '${e.day}|${e.habitId}';
+      _status[key] = e.status;
+      if (e.note != null) _notes[key] = e.note!;
+    }
+    _startDay();
+  }
+
+  final Store store;
+  final DateTime Function() _clock;
+
+  late DateTime today;
+
+  late int viewYear;
+
+  /// 1-12 when a month tab is open, null for the Today view.
+  int? viewMonth;
+
+  /// Name of the chosen colour theme; null until one is picked.
+  late String? themeName = store.setting('theme');
+  late final ValueNotifier<String?> themeNotifier = ValueNotifier(themeName);
+
+  void setTheme(String name) {
+    themeName = name;
+    themeNotifier.value = name;
+    store.setSetting('theme', name);
+    notifyListeners();
+  }
+
+  final Map<(int, int), List<Habit>> _monthHabits = {};
+  final Map<String, HabitStatus> _status = {};
+  final Map<String, String> _notes = {};
+  final Map<TodoScope, List<TodoItem>> todos = {};
+
+  String _cell(DateTime day, Habit h) => '${dateKey(day)}|${h.id}';
+
+  /// Call periodically: when the date has changed, carries unfinished to-dos
+  /// into the new day/week/month.
+  void checkDate() {
+    final now = dateOnly(_clock());
+    if (now == today) return;
+    if (viewYear == today.year) viewYear = now.year;
+    today = now;
+    _startDay();
+    notifyListeners();
+  }
+
+  void _startDay() {
+    for (final scope in TodoScope.values) {
+      final period = scope.period(today);
+      store.carryForward(scope, period);
+      todos[scope] = store.todos(scope, period);
+    }
+    habitsFor(today.year, today.month);
+  }
+
+  // Navigation
+
+  void showToday() {
+    viewMonth = null;
+    viewYear = today.year;
+    notifyListeners();
+  }
+
+  void showMonth(int month) {
+    viewMonth = month;
+    notifyListeners();
+  }
+
+  void shiftYear(int delta) {
+    viewYear += delta;
+    viewMonth ??= today.month;
+    notifyListeners();
+  }
+
+  // Ritual lists
+
+  bool isFutureMonth(int year, int month) =>
+      year * 12 + month > today.year * 12 + today.month;
+
+  /// Today's month's rituals.
+  List<Habit> get habits => habitsFor(today.year, today.month);
+
+  /// A month's ritual list. A month between your first list and today is
+  /// saved as a copy of the month before it. Future months, and months
+  /// before your first list, are previews: nothing is saved until a ritual
+  /// there is ticked or edited.
+  List<Habit> habitsFor(int year, int month) {
+    final cached = _monthHabits[(year, month)];
+    if (cached != null) return cached;
+
+    final source = store.monthHabits(year, month).isNotEmpty
+        ? (year, month)
+        : store.nearestMonthWithHabits(year, month);
+    if (source == null) return const [];
+    final beforeFirst = source.$1 * 12 + source.$2 > year * 12 + month;
+    if (source != (year, month) && (beforeFirst || isFutureMonth(year, month))) {
+      return store.monthHabits(source.$1, source.$2);
+    }
+    return _savedList(year, month);
+  }
+
+  /// Whether [habitsFor] is showing an unsaved copy for this month.
+  bool isPreviewMonth(int year, int month) =>
+      habitsFor(year, month).isNotEmpty && !_monthHabits.containsKey((year, month));
+
+  /// The month's saved list, copying the nearest month first if needed.
+  List<Habit> _savedList(int year, int month) {
+    final cached = _monthHabits[(year, month)];
+    if (cached != null) return cached;
+    if (store.monthHabits(year, month).isEmpty) {
+      final source = store.nearestMonthWithHabits(year, month);
+      if (source != null) store.copyMonth(source, (year, month));
+    }
+    return _monthHabits[(year, month)] = store.monthHabits(year, month);
+  }
+
+  // Edits take the habit's id, because [h] may come from a preview list.
+
+  void addHabit(int year, int month, String name) {
+    if (name.trim().isEmpty) return;
+    _savedList(year, month).add(store.addHabit(year, month, name.trim()));
+    notifyListeners();
+  }
+
+  void renameHabit(int year, int month, Habit h, String name) {
+    if (name.trim().isEmpty) return;
+    final saved = _savedList(year, month).firstWhere((x) => x.id == h.id);
+    saved.name = name.trim();
+    store.renameHabit(year, month, h.id, saved.name);
+    notifyListeners();
+  }
+
+  void removeHabit(int year, int month, Habit h) {
+    _savedList(year, month).removeWhere((x) => x.id == h.id);
+    store.removeHabit(year, month, h.id);
+    notifyListeners();
+  }
+
+  void reorderHabit(int year, int month, int from, int to) {
+    final list = _savedList(year, month);
+    list.insert(to, list.removeAt(from));
+    store.reorderHabits(year, month, [for (final h in list) h.id]);
+    notifyListeners();
+  }
+
+  // Entries
+
+  HabitStatus statusOf(DateTime day, Habit h) =>
+      _status[_cell(day, h)] ?? HabitStatus.none;
+
+  String? noteOf(DateTime day, Habit h) => _notes[_cell(day, h)];
+
+  HabitStatus cycle(DateTime day, Habit h) {
+    _savedList(day.year, day.month); // ticking a preview month saves its list
+    final next = statusOf(day, h).next;
+    final key = _cell(day, h);
+    if (next == HabitStatus.none) {
+      _status.remove(key);
+      _notes.remove(key);
+    } else {
+      _status[key] = next;
+    }
+    store.setEntry(dateKey(day), h.id, next);
+    notifyListeners();
+    return next;
+  }
+
+  void setNote(DateTime day, Habit h, String note) {
+    final key = _cell(day, h);
+    final trimmed = note.trim();
+    if (trimmed.isEmpty) {
+      _notes.remove(key);
+    } else {
+      _notes[key] = trimmed;
+    }
+    store.setNote(dateKey(day), h.id, trimmed.isEmpty ? null : trimmed);
+    notifyListeners();
+  }
+
+  int doneOn(DateTime day) =>
+      habits.where((h) => statusOf(day, h) == HabitStatus.done).length;
+
+  /// Consecutive done days ending today (or yesterday, if today is still
+  /// open). An "other" day is excused: it neither breaks nor extends a streak.
+  int currentStreak(Habit h) {
+    var day = today;
+    if (statusOf(day, h) != HabitStatus.done) {
+      day = day.subtract(const Duration(days: 1));
+    }
+    var streak = 0;
+    for (var i = 0; i < 365; i++) {
+      final s = statusOf(day, h);
+      if (s == HabitStatus.done) {
+        streak++;
+      } else if (s != HabitStatus.other) {
+        break;
+      }
+      day = day.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  int bestStreak(Habit h) {
+    var best = 0, run = 0;
+    var day = DateTime(today.year - 1, 1, 1);
+    while (!day.isAfter(today)) {
+      final s = statusOf(day, h);
+      if (s == HabitStatus.done) {
+        run++;
+        if (run > best) best = run;
+      } else if (s != HabitStatus.other) {
+        run = 0;
+      }
+      day = DateTime(day.year, day.month, day.day + 1);
+    }
+    return best;
+  }
+
+  // To-dos
+
+  void addTodo(TodoScope scope, String text) {
+    if (text.trim().isEmpty) return;
+    todos[scope]!.add(store.addTodo(scope, scope.period(today), text.trim()));
+    notifyListeners();
+  }
+
+  void toggleTodo(TodoItem item) {
+    item.done = !item.done;
+    store.setTodoDone(item.id, item.done);
+    notifyListeners();
+  }
+
+  void removeTodo(TodoScope scope, TodoItem item) {
+    todos[scope]!.remove(item);
+    store.deleteTodo(item.id);
+    notifyListeners();
+  }
+
+  // Journal
+
+  String journalOf(DateTime day) => store.journal(dateKey(day));
+
+  void setJournal(DateTime day, String text) => store.setJournal(dateKey(day), text);
+
+  /// First run: the ritual list, 1 October and the to-dos from the spreadsheet.
+  void _seed() {
+    const names = [
+      'Get up at 8',
+      'Clean room',
+      'No phone until breakfast',
+      'Morning walk',
+      'Brush teeth',
+      'Check calendar and alarms',
+      'Weights',
+      'Creatine, min + fin, vit. D, protein powder',
+      'Wind down at 8:45',
+      'Journal',
+      'Meditate',
+      'Screens, shower finished by 9:30 pm',
+      'Read',
+      'Bed by 10:30 pm',
+    ];
+    const oct1 = [0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0];
+    for (final (i, name) in names.indexed) {
+      final h = store.addHabit(2026, 10, name);
+      store.setEntry('2026-10-01', h.id, oct1[i] == 1 ? HabitStatus.done : HabitStatus.missed);
+    }
+
+    const sheetTodos = {
+      'Chloe money back and forth': true,
+      'Update spending tracker': true,
+      'Find all sunglasses': true,
+      'Change PC password': true,
+      'Transfer journals': true,
+      'Clean inside of car': true,
+      'Dust room': false,
+      'Vacuum and mop bedroom floor': false,
+      'Work out how to use Google Drive on Linux': true,
+      'Delete screenshots from Google Photos and all local copies': true,
+    };
+    final period = TodoScope.today.period(today);
+    sheetTodos.forEach((text, done) => store.addTodo(TodoScope.today, period, text, done: done));
+  }
+}
+
+class AppScope extends InheritedNotifier<AppState> {
+  const AppScope({super.key, required AppState state, required super.child})
+      : super(notifier: state);
+
+  static AppState of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
+}
