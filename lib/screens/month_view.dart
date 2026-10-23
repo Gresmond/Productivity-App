@@ -361,47 +361,42 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerRight,
-              child: AnimatedOpacity(
-                opacity: logged > 0 ? 1 : 0,
-                duration: _morph,
-                curve: Curves.easeInOutCubic,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: p.empty.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: p.tileBorder.withValues(alpha: 0.6), width: 0.8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(end: logged == 0 ? 0 : done * 100 / logged),
-                        duration: _morph,
-                        curve: Curves.easeInOutCubic,
-                        builder: (context, percent, _) => Text(
-                          '${percent.round()}%',
-                          style: TextStyle(
-                            fontFamily: Fonts.display,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: p.ink,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.doneLabel,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: p.empty.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: p.tileBorder.withValues(alpha: 0.6), width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(end: logged == 0 ? 0 : done * 100 / logged),
+                      duration: _morph,
+                      curve: Curves.easeInOutCubic,
+                      builder: (context, percent, _) => Text(
+                        '${percent.round()}%',
                         style: TextStyle(
-                          fontFamily: Fonts.ui,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          color: p.inkMuted,
+                          fontFamily: Fonts.display,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: p.ink,
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.doneLabel,
+                      style: TextStyle(
+                        fontFamily: Fonts.ui,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: p.inkMuted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -493,11 +488,7 @@ class _ColumnsDelegate extends FlowDelegate {
       final size = context.getChildSize(i)!;
       context.paintChild(
         i,
-        transform: Matrix4.translationValues(
-          (d - 1) * col + (col - size.width) / 2,
-          (height - size.height) / 2,
-          0,
-        ),
+        transform: Matrix4.translationValues((d - 1) * col + (col - size.width) / 2, (height - size.height) / 2, 0),
         opacity: Curves.easeIn.transform(fraction),
       );
     }
@@ -513,12 +504,8 @@ class _ColumnsDelegate extends FlowDelegate {
 /// The hover highlight behind a row's squares, from the first square to
 /// the last one that can be clicked, following the columns as they move.
 class _HighlightPainter extends CustomPainter {
-  _HighlightPainter({
-    required this.layout,
-    required this.clickableDays,
-    required this.cellSize,
-    required this.color,
-  }) : super(repaint: layout.shown);
+  _HighlightPainter({required this.layout, required this.clickableDays, required this.cellSize, required this.color})
+    : super(repaint: layout.shown);
 
   static const pad = 3.0;
 
@@ -534,10 +521,7 @@ class _HighlightPainter extends CustomPainter {
     final inset = (col - cellSize) / 2;
     final clickable = clickableDays.clamp(0, layout.shown.value) * col;
     final rect = Rect.fromLTWH(inset - pad, 0, clickable - 2 * inset + 2 * pad, size.height);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, Radius.circular(cellSize * 0.28 + pad)),
-      Paint()..color = color,
-    );
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(cellSize * 0.28 + pad)), Paint()..color = color);
   }
 
   @override
@@ -822,10 +806,7 @@ class _RitualEditorState extends State<_RitualEditor> {
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Add a ritual to ${monthNames[month - 1]}',
-                      hintStyle: TextStyle(
-                        fontFamily: Fonts.body,
-                        color: p.inkMuted.withValues(alpha: 0.7),
-                      ),
+                      hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.7)),
                     ),
                     onSubmitted: (v) {
                       state.addHabit(year, month, v);
@@ -839,7 +820,7 @@ class _RitualEditorState extends State<_RitualEditor> {
           ),
           const SizedBox(height: 18),
           Text(
-            'Changes apply to ${monthNames[month - 1]} only, except notes, which follow a ritual into every month. '
+            'Changes apply to ${monthNames[month - 1]} only. '
             'Each new month starts as a copy of the one before.',
             style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
           ),
@@ -850,13 +831,7 @@ class _RitualEditorState extends State<_RitualEditor> {
 }
 
 class _EditableRow extends StatefulWidget {
-  const _EditableRow({
-    super.key,
-    required this.index,
-    required this.year,
-    required this.month,
-    required this.habit,
-  });
+  const _EditableRow({super.key, required this.index, required this.year, required this.month, required this.habit});
 
   final int index;
   final int year;
@@ -926,7 +901,7 @@ class _EditableRowState extends State<_EditableRow> {
                     onChanged: (v) => state.renameHabit(widget.year, widget.month, widget.habit, v),
                   ),
                 ),
-                // Shown on hover over the ritual, in every month it's in.
+                // Shown on hover over the ritual.
                 TextField(
                   controller: _note,
                   maxLines: null,
@@ -938,7 +913,7 @@ class _EditableRowState extends State<_EditableRow> {
                     hintText: 'Add a note',
                     hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.5)),
                   ),
-                  onChanged: (v) => state.setHabitNote(widget.habit, v),
+                  onChanged: (v) => state.setHabitNote(widget.year, widget.month, widget.habit, v),
                 ),
               ],
             ),
@@ -985,7 +960,10 @@ class _PillButton extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: fg),
               const SizedBox(width: 8),
-              Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
+              Text(
+                label,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg),
+              ),
             ],
           ),
         ),
@@ -1055,8 +1033,9 @@ class _DayHeader extends StatelessWidget {
                         duration: _morph,
                         switchInCurve: Curves.easeInOutCubic,
                         switchOutCurve: Curves.easeInOutCubic,
-                        layoutBuilder: (current, previous) =>
-                            ClipRect(child: Stack(alignment: Alignment.center, children: [...previous, ?current])),
+                        layoutBuilder: (current, previous) => ClipRect(
+                          child: Stack(alignment: Alignment.center, children: [...previous, ?current]),
+                        ),
                         transitionBuilder: (child, anim) => SlideTransition(
                           position: Tween(
                             begin: Offset(0, child.key == ValueKey(letter) ? 1 : -1),

@@ -353,12 +353,17 @@ class _HabitRow extends StatelessWidget {
             Expanded(
               child: Tooltip(
                 message: habit.description ?? habit.name,
-                waitDuration: const Duration(milliseconds: 600),
-                child: Text(
-                  habit.name,
-                  maxLines: nameLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: nameStyle.copyWith(color: p.ink),
+                waitDuration: const Duration(milliseconds: 300),
+                // The whole height of the row, not just the line of text,
+                // so the tooltip is easy to catch.
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    habit.name,
+                    maxLines: nameLines,
+                    overflow: TextOverflow.ellipsis,
+                    style: nameStyle.copyWith(color: p.ink),
+                  ),
                 ),
               ),
             ),

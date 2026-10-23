@@ -329,7 +329,7 @@ void main() {
       final db = sqlite3.open(path);
       db.execute('''
         DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits;
-        ALTER TABLE habits DROP COLUMN note; PRAGMA user_version = 2;
+        ALTER TABLE month_habits DROP COLUMN note; PRAGMA user_version = 2;
       ''');
       final ids = <String, int>{};
       for (final (i, name) in [
@@ -393,31 +393,50 @@ void main() {
   });
 
   group('ritual notes', () {
-    test('a note follows its ritual into every month, and is kept', () {
+    test("a note belongs to its month: copied into a new one, then edited apart", () {
       final dir = Directory.systemTemp.createTempSync('productivity_notes');
       addTearDown(() => dir.deleteSync(recursive: true));
       final path = '${dir.path}/app.db';
       var now = DateTime(2026, 10, 31);
       var state = AppState(Store.open(path), clock: () => now);
       final read = state.habits.firstWhere((h) => h.name == 'Read');
-      state.setHabitNote(read, '  20 pages before bed ');
-      expect(read.description, '20 pages before bed');
+      state.setHabitNote(2026, 10, read, '  20 pages before bed ');
+      expect(state.habits.firstWhere((h) => h.name == 'Read').description, '20 pages before bed');
 
       now = DateTime(2026, 11, 1);
       state.checkDate();
       final nov = state.habits.firstWhere((h) => h.name == 'Read');
-      expect(nov.description, '20 pages before bed', reason: 'copied month');
-      expect(state.habitsFor(2025, 3).firstWhere((h) => h.name == 'Read').description, '20 pages before bed');
+      expect(nov.description, '20 pages before bed', reason: 'a new month copies the one before');
 
-      state.setHabitNote(nov, '30 pages');
-      expect(state.habitsFor(2026, 10).firstWhere((h) => h.name == 'Read').description, '30 pages');
+      state.setHabitNote(2026, 11, nov, '30 pages');
+      expect(state.habitsFor(2026, 10).firstWhere((h) => h.name == 'Read').description, '20 pages before bed');
       state.store.close();
 
       state = AppState(Store.open(path), clock: () => now);
       expect(state.habits.firstWhere((h) => h.name == 'Read').description, '30 pages');
-      state.setHabitNote(state.habits.firstWhere((h) => h.name == 'Read'), '  ');
+      expect(state.habitsFor(2026, 10).firstWhere((h) => h.name == 'Read').description, '20 pages before bed');
+      state.setHabitNote(2026, 11, state.habits.firstWhere((h) => h.name == 'Read'), '  ');
       expect(state.habits.firstWhere((h) => h.name == 'Read').description, isNull, reason: 'blank removes it');
       state.store.close();
+    });
+
+    test('notes from when they followed a ritual everywhere stay in every month it is in', () {
+      final path = '${Directory.systemTemp.createTempSync('productivity_notes_v4').path}/old.db';
+      Store.open(path).close();
+      final db = sqlite3.open(path);
+      db.execute('''
+        ALTER TABLE month_habits DROP COLUMN note; ALTER TABLE habits ADD COLUMN note TEXT;
+        INSERT INTO habits (note) VALUES ('Home gym');
+        PRAGMA user_version = 4;
+      ''');
+      final id = db.lastInsertRowId;
+      db.execute("INSERT INTO month_habits VALUES (2026, 9, ?, 'Gym', 0), (2026, 10, ?, 'Gym', 0)", [id, id]);
+      db.close();
+
+      final store = Store.open(path);
+      expect(store.monthHabits(2026, 9).single.description, 'Home gym');
+      expect(store.monthHabits(2026, 10).single.description, 'Home gym');
+      store.close();
     });
   });
 
@@ -602,10 +621,24 @@ void main() {
     await tester.pumpAndSettle();
     await _shoot(tester, 'today');
 
+    // The bottom sleep row's tooltip shows from anywhere on its height, not
+    // just over the line of text.
+    final name = tester.getRect(find.text('Sleep Early'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(Offset(name.center.dx, name.top - 8));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('Sleep at 11 pm'), findsOneWidget);
+    await mouse.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Oct').first); // a hidden copy reserves its bold width
     await tester.pumpAndSettle();
     expect(find.text('31'), findsNWidgets(2), reason: 'rituals and sleep schedule each have the days');
     expect(find.text('SLEEP SCHEDULE  ·  4'), findsOneWidget);
+    expect(find.text('0%'), findsOneWidget, reason: 'the sleep schedule shows its percentage before anything is marked');
     await _shoot(tester, 'month');
 
     await tester.tap(find.text('Edit rituals'));

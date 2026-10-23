@@ -138,6 +138,19 @@ class Store {
         PRAGMA user_version = 4;
       ''');
     }
+    if (version < 5) {
+      _transaction(() {
+        _db.execute('''
+          -- Notes belong to a month, like names: a new month copies them, and
+          -- an edit changes only its own month. Each month keeps the note it
+          -- had.
+          ALTER TABLE month_habits ADD COLUMN note TEXT;
+          UPDATE month_habits SET note = (SELECT note FROM habits WHERE id = habit_id);
+          ALTER TABLE habits DROP COLUMN note;
+          PRAGMA user_version = 5;
+        ''');
+      });
+    }
   }
 
   // Habits
@@ -157,8 +170,7 @@ class Store {
 
   List<Habit> monthHabits(int year, int month) => [
         for (final r in _db.select(
-          'SELECT habit_id, name, note FROM month_habits JOIN habits ON habits.id = habit_id '
-          'WHERE year = ? AND month = ? ORDER BY position',
+          'SELECT habit_id, name, note FROM month_habits WHERE year = ? AND month = ? ORDER BY position',
           [year, month],
         ))
           Habit(r['habit_id'] as int, r['name'] as String, description: r['note'] as String?),
@@ -180,8 +192,8 @@ class Store {
 
   void copyMonth((int, int) from, (int, int) to) {
     _db.execute(
-      'INSERT INTO month_habits (year, month, habit_id, name, position) '
-      'SELECT ?, ?, habit_id, name, position FROM month_habits WHERE year = ? AND month = ?',
+      'INSERT INTO month_habits (year, month, habit_id, name, position, note) '
+      'SELECT ?, ?, habit_id, name, position, note FROM month_habits WHERE year = ? AND month = ?',
       [to.$1, to.$2, from.$1, from.$2],
     );
   }
@@ -204,8 +216,11 @@ class Store {
     );
   }
 
-  void setHabitNote(int habitId, String? note) {
-    _db.execute('UPDATE habits SET note = ? WHERE id = ?', [note, habitId]);
+  void setHabitNote(int year, int month, int habitId, String? note) {
+    _db.execute(
+      'UPDATE month_habits SET note = ? WHERE year = ? AND month = ? AND habit_id = ?',
+      [note, year, month, habitId],
+    );
   }
 
   void removeHabit(int year, int month, int habitId) {

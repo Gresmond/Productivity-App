@@ -244,16 +244,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The same note in every month the ritual is in; blank removes it.
-  void setHabitNote(Habit h, String note) {
-    final trimmed = note.trim().isEmpty ? null : note.trim();
-    for (final list in _monthHabits.values) {
-      for (final x in list) {
-        if (x.id == h.id) x.description = trimmed;
-      }
-    }
-    h.description = trimmed; // [h] may be from a preview list
-    store.setHabitNote(h.id, trimmed);
+  /// This month's note on the ritual; blank removes it.
+  void setHabitNote(int year, int month, Habit h, String note) {
+    final saved = _savedList(year, month).firstWhere((x) => x.id == h.id);
+    saved.description = note.trim().isEmpty ? null : note.trim();
+    store.setHabitNote(year, month, h.id, saved.description);
     notifyListeners();
   }
 
