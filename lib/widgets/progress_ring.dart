@@ -18,8 +18,8 @@ class ProgressRing extends StatelessWidget {
     final target = total == 0 ? 0.0 : done / total;
     return TweenAnimationBuilder<double>(
       tween: Tween(end: target),
-      duration: const Duration(milliseconds: 700),
-      curve: Curves.easeOutCubic,
+      duration: Motion.morph,
+      curve: Motion.morphCurve,
       builder: (context, value, _) => SizedBox.square(
         dimension: size,
         child: CustomPaint(

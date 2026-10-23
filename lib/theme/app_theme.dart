@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'palette_recipe.dart';
 
+export 'motion.dart';
+
 /// Font families registered in pubspec.yaml.
 abstract final class Fonts {
   /// Page titles, card headings and big numbers.

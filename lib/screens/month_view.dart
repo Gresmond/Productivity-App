@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/appear.dart';
 import '../widgets/fade_through.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
@@ -111,7 +112,7 @@ class _MonthViewState extends State<MonthView> {
           Row(
             children: [
               FadeThrough(
-                duration: const Duration(milliseconds: 260),
+                duration: Motion.click,
                 layoutBuilder: (current, previous) =>
                     Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
                 child: Text(label, key: ValueKey(label), style: header),
@@ -123,8 +124,8 @@ class _MonthViewState extends State<MonthView> {
                 ignoring: future,
                 child: AnimatedOpacity(
                   opacity: future ? 0 : 1,
-                  duration: const Duration(milliseconds: 420),
-                  curve: Curves.easeInOutCubic,
+                  duration: Motion.morph,
+                  curve: Motion.morphCurve,
                   child: _PillButton(
                     label: _editing ? 'Done' : 'Edit rituals',
                     icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
@@ -140,8 +141,8 @@ class _MonthViewState extends State<MonthView> {
           // place (see [_Grid]); only switching to the editor fades. The
           // height eases when the new month has a different number of rituals.
           AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOutCubic,
+            duration: Motion.morph,
+            curve: Motion.morphCurve,
             alignment: Alignment.topCenter,
             clipBehavior: Clip.none,
             child: FadeThrough(
@@ -186,7 +187,6 @@ class _Grid extends StatefulWidget {
 }
 
 class _GridState extends State<_Grid> with TickerProviderStateMixin {
-  static const _morph = Duration(milliseconds: 420);
   static const _minCol = 22.0;
   static const _maxCell = 64.0;
 
@@ -207,8 +207,8 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
   /// The month the weekend bands are fading from, and the fade into this
   /// month's bands.
   (int, int)? _bandsFrom;
-  late final _bands = AnimationController(vsync: this, duration: _morph, value: 1);
-  late final _bandsCurved = CurvedAnimation(parent: _bands, curve: Curves.easeInOutCubic);
+  late final _bands = AnimationController(vsync: this, duration: Motion.morph, value: 1);
+  late final _bandsCurved = CurvedAnimation(parent: _bands, curve: Motion.morphCurve);
 
   @override
   void didUpdateWidget(_Grid old) {
@@ -219,7 +219,7 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
     _bandsFrom = (old.year, old.month);
     _bands.forward(from: 0);
     _shown
-        .animateTo(daysInMonth(widget.year, widget.month).toDouble(), duration: _morph, curve: Curves.easeInOutCubic)
+        .animateTo(daysInMonth(widget.year, widget.month).toDouble(), duration: Motion.morph, curve: Motion.morphCurve)
         .whenCompleteOrCancel(() {
           if (mounted && _shown.value == daysInMonth(widget.year, widget.month)) setState(() => _previous = null);
         });
@@ -298,7 +298,7 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 10),
             for (final h in habits)
-              _FadeIn(
+              Appear(
                 key: ValueKey(h.id),
                 animate: _known.isNotEmpty && !_known.contains(h.id),
                 child: _MonthHabitRow(
@@ -335,8 +335,8 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
                   child: IgnorePointer(
                     child: AnimatedOpacity(
                       opacity: state.restWeekends ? 1 : 0,
-                      duration: _morph,
-                      curve: Curves.easeInOutCubic,
+                      duration: Motion.morph,
+                      curve: Motion.morphCurve,
                       child: CustomPaint(
                         painter: _RestBandPainter(
                           layout: layout,
@@ -373,8 +373,8 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
                   children: [
                     TweenAnimationBuilder<double>(
                       tween: Tween(end: logged == 0 ? 0 : done * 100 / logged),
-                      duration: _morph,
-                      curve: Curves.easeInOutCubic,
+                      duration: Motion.morph,
+                      curve: Motion.morphCurve,
                       builder: (context, percent, _) => Text(
                         '${percent.round()}%',
                         style: TextStyle(
@@ -591,42 +591,6 @@ class _RestBandPainter extends CustomPainter {
       !listEquals(old.was, was);
 }
 
-/// Fades and grows its child in when first built, if [animate].
-class _FadeIn extends StatefulWidget {
-  const _FadeIn({super.key, required this.animate, required this.child});
-
-  final bool animate;
-  final Widget child;
-
-  @override
-  State<_FadeIn> createState() => _FadeInState();
-}
-
-class _FadeInState extends State<_FadeIn> with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 420),
-    value: widget.animate ? 0 : 1,
-  )..forward();
-  late final _curved = CurvedAnimation(parent: _controller, curve: Curves.easeInOutCubic);
-
-  @override
-  void dispose() {
-    _curved.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizeTransition(
-      sizeFactor: _curved,
-      alignment: Alignment.topCenter,
-      child: FadeTransition(opacity: _curved, child: widget.child),
-    );
-  }
-}
-
 class _MonthHabitRow extends StatefulWidget {
   const _MonthHabitRow({
     required this.habit,
@@ -709,7 +673,7 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
                   child: IgnorePointer(
                     child: AnimatedOpacity(
                       opacity: _hover ? 1 : 0,
-                      duration: const Duration(milliseconds: 140),
+                      duration: Motion.hover,
                       child: CustomPaint(
                         painter: _HighlightPainter(
                           layout: widget.layout,
@@ -948,7 +912,7 @@ class _PillButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: Motion.hover,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
@@ -981,8 +945,6 @@ class _DayHeader extends StatelessWidget {
   /// A weekend shown as a rest day: greyed.
   final bool rest;
 
-  static const _morph = Duration(milliseconds: 420);
-
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -1001,12 +963,12 @@ class _DayHeader extends StatelessWidget {
           // they follow a theme cross-fade exactly instead of trailing it.
           child: TweenAnimationBuilder<double>(
             tween: Tween(end: rest ? 1 : 0),
-            duration: _morph,
-            curve: Curves.easeInOutCubic,
+            duration: Motion.morph,
+            curve: Motion.morphCurve,
             builder: (context, r, _) => TweenAnimationBuilder<double>(
               tween: Tween(end: isToday ? 1 : 0),
-              duration: _morph,
-              curve: Curves.easeInOutCubic,
+              duration: Motion.morph,
+              curve: Motion.morphCurve,
               builder: (context, t, _) {
                 final letterFg = Color.lerp(weekend ? p.other : p.inkMuted, p.inkMuted.withValues(alpha: 0.6), r)!;
                 final numberFg = Color.lerp(p.ink, p.inkMuted.withValues(alpha: 0.75), r)!;
@@ -1030,9 +992,9 @@ class _DayHeader extends StatelessWidget {
                       // out above it, rather than every letter blinking out at once.
                       // Clipped to one line, so the two never show stacked.
                       AnimatedSwitcher(
-                        duration: _morph,
-                        switchInCurve: Curves.easeInOutCubic,
-                        switchOutCurve: Curves.easeInOutCubic,
+                        duration: Motion.morph,
+                        switchInCurve: Motion.morphCurve,
+                        switchOutCurve: Motion.morphCurve,
                         layoutBuilder: (current, previous) => ClipRect(
                           child: Stack(alignment: Alignment.center, children: [...previous, ?current]),
                         ),

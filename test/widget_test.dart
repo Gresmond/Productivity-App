@@ -956,12 +956,55 @@ void main() {
 
     await tester.tap(find.text('Charlie'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    // The glide waits for the tick to land.
+    await tester.pump(const Duration(milliseconds: 300));
     expect(top('Charlie'), allOf(lessThan(charlie), greaterThan(alpha)), reason: 'still on its way up');
 
     await tester.pumpAndSettle();
     expect(top('Charlie'), moreOrLessEquals(alpha));
     expect(top('Alpha'), greaterThan(top('Charlie')));
+  });
+
+  testWidgets('a removed to-do closes up before it leaves', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    for (final t in [...state.todos[TodoScope.week]!]) {
+      state.removeTodo(TodoScope.week, t);
+    }
+    for (final t in ['Alpha', 'Bravo', 'Charlie']) {
+      state.addTodo(TodoScope.week, t);
+    }
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+    final charlie = top('Charlie');
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: tester.getCenter(find.text('Bravo')));
+    addTearDown(gesture.removePointer);
+    await tester.pumpAndSettle();
+    // Bravo's remove button: the nearest one to the right of its text.
+    // Clicked with the mouse, so the row stays hovered.
+    final bravo = tester.getCenter(find.text('Bravo'));
+    final remove = [
+      for (final e in find.byTooltip('Remove').evaluate()) tester.getCenter(find.byElementPredicate((x) => x == e)),
+    ].where((c) => c.dx > bravo.dx).reduce((a, b) => (a - bravo).distance <= (b - bravo).distance ? a : b);
+    await gesture.moveTo(remove);
+    await tester.pump();
+    await gesture.down(remove);
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(state.todos[TodoScope.week]!.length, 3, reason: 'still closing up');
+    expect(top('Charlie'), lessThan(charlie), reason: 'the row below follows it up');
+
+    await tester.pumpAndSettle();
+    expect(state.todos[TodoScope.week]!.map((t) => t.text), ['Alpha', 'Charlie']);
+    expect(top('Charlie'), lessThan(charlie));
   });
 
   testWidgets('Enter saves a note', (tester) async {

@@ -150,8 +150,8 @@ class _BackupRow extends StatelessWidget {
     final (title, subtitle) = _describe(backup, today);
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
+      duration: Motion.hover,
+      curve: Motion.hoverCurve,
       padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
       decoration: BoxDecoration(
         color: confirming ? p.accent.withValues(alpha: 0.08) : p.empty.withValues(alpha: 0.55),

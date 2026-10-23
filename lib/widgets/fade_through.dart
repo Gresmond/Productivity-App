@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// An [AnimatedSwitcher] that fades the old child out before the new one
 /// fades in, so the two never show together at any real strength.
 class FadeThrough extends StatelessWidget {
   const FadeThrough({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 420),
+    this.duration = Motion.morph,
     this.scaleFrom = 1.0,
     this.layoutBuilder = AnimatedSwitcher.defaultLayoutBuilder,
   });
@@ -21,11 +23,9 @@ class FadeThrough extends StatelessWidget {
 
   final AnimatedSwitcherLayoutBuilder layoutBuilder;
 
-  // The outgoing child runs the same animation in reverse, so it eases out
-  // over the first ~55% and the new one eases in over the last ~55%. Both
-  // ends are gentle: an easeOut here made the old child vanish in two frames
-  // and the new one pop in, which read as a flicker against the background.
-  static final _curve = CurveTween(curve: const Interval(0.45, 1.0, curve: Curves.easeInOutSine));
+  // The outgoing child runs the same animation in reverse, so the two
+  // halves follow [Motion.incoming] and [Motion.outgoing].
+  static final _curve = CurveTween(curve: Motion.incoming);
 
   /// Lays the outgoing child over the incoming one without letting it change
   /// the height, clipped to the incoming child's box. Takes the full width.

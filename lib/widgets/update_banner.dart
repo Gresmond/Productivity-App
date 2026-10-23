@@ -17,8 +17,6 @@ class UpdateBanner extends StatefulWidget {
 }
 
 class _UpdateBannerState extends State<UpdateBanner> {
-  static const _ease = Duration(milliseconds: 420);
-
   /// What the card last showed, kept while it slides away.
   UpdateStatus _shown = UpdateStatus.available;
 
@@ -34,12 +32,12 @@ class _UpdateBannerState extends State<UpdateBanner> {
           ignoring: !visible,
           child: AnimatedSlide(
             offset: visible ? Offset.zero : const Offset(0, 0.35),
-            duration: _ease,
-            curve: Curves.easeInOutCubic,
+            duration: Motion.morph,
+            curve: Motion.morphCurve,
             child: AnimatedOpacity(
               opacity: visible ? 1 : 0,
-              duration: _ease,
-              curve: Curves.easeInOutCubic,
+              duration: Motion.morph,
+              curve: Motion.morphCurve,
               child: _Card(updater: widget.updater, status: _shown),
             ),
           ),
@@ -141,14 +139,10 @@ class _Card extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOutCubic,
+              duration: Motion.morph,
+              curve: Motion.morphCurve,
               alignment: Alignment.topLeft,
-              child: FadeThrough(
-                duration: const Duration(milliseconds: 360),
-                layoutBuilder: FadeThrough.sizeToCurrent,
-                child: body,
-              ),
+              child: FadeThrough(duration: Motion.morph, layoutBuilder: FadeThrough.sizeToCurrent, child: body),
             ),
           ),
         ],
@@ -203,7 +197,8 @@ class _ButtonState extends State<_Button> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+          duration: Motion.hover,
+          curve: Motion.hoverCurve,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),

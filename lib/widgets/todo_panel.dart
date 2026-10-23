@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'appear.dart';
+import 'mark.dart';
 import 'tile.dart';
 
 class TodoPanel extends StatefulWidget {
@@ -23,11 +25,10 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
 
   /// Drives every row's glide to its new place when the order changes.
   /// The glide waits for the tick to fill, so the mark lands first.
-  late final _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 640), value: 1);
-  static const _afterTick = Interval(0.3, 1, curve: Curves.easeInOutCubic);
+  late final _slide = AnimationController(vsync: this, duration: Motion.click + Motion.morph, value: 1);
   late final _curved = CurvedAnimation(
     parent: _slide,
-    curve: _afterTick,
+    curve: Interval(Motion.click.inMicroseconds / (Motion.click + Motion.morph).inMicroseconds, 1, curve: Motion.morphCurve),
   );
   List<int> _order = const [];
 
@@ -68,12 +69,9 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
     final open = all.length - all.where((t) => t.done).length;
     final order = [for (final t in items) t.id];
     if (!_sameOrder(order, _order)) {
-      if (_order.isNotEmpty) {
+      // A removed row has already closed up, so only a reorder glides.
+      if (_order.isNotEmpty && order.length >= _order.length) {
         _generation++;
-        // A removed row has already faded, so the rows below close up at once.
-        final removed = order.length < _order.length;
-        _slide.duration = Duration(milliseconds: removed ? 420 : 640);
-        _curved.curve = removed ? Curves.easeInOutCubic : _afterTick;
         _slide.forward(from: 0);
       }
       _order = order;
@@ -369,35 +367,12 @@ class _TodoRow extends StatefulWidget {
   State<_TodoRow> createState() => _TodoRowState();
 }
 
-class _TodoRowState extends State<_TodoRow> with SingleTickerProviderStateMixin {
+class _TodoRowState extends State<_TodoRow> {
   bool _hover = false;
   bool _pressed = false;
 
-  /// In when added; out before it's removed, then the rows below glide up.
-  late final _fade = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 200),
-    value: widget.fadeIn ? 0 : 1,
-  );
-  late final _opacity = CurvedAnimation(parent: _fade, curve: Curves.easeInOutCubic);
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.fadeIn) _fade.forward();
-  }
-
-  @override
-  void dispose() {
-    _opacity.dispose();
-    _fade.dispose();
-    super.dispose();
-  }
-
-  Future<void> _remove(AppState state) async {
-    await _fade.reverse();
-    if (mounted) state.removeTodo(widget.scope, widget.item);
-  }
+  /// Set when removed: the row closes up, then leaves the list.
+  bool _leaving = false;
 
   @override
   Widget build(BuildContext context) {
@@ -405,8 +380,10 @@ class _TodoRowState extends State<_TodoRow> with SingleTickerProviderStateMixin 
     final state = AppScope.of(context);
     final item = widget.item;
 
-    return FadeTransition(
-      opacity: _opacity,
+    return Appear(
+      animate: widget.fadeIn,
+      shown: !_leaving,
+      onHidden: () => state.removeTodo(widget.scope, item),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() {
@@ -420,7 +397,8 @@ class _TodoRowState extends State<_TodoRow> with SingleTickerProviderStateMixin 
           onTapCancel: () => setState(() => _pressed = false),
           onTap: () => state.toggleTodo(item),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
+            duration: Motion.hover,
+            curve: Motion.hoverCurve,
             margin: const EdgeInsets.symmetric(vertical: 2),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
@@ -433,7 +411,8 @@ class _TodoRowState extends State<_TodoRow> with SingleTickerProviderStateMixin 
                 const SizedBox(width: 11),
                 Expanded(
                   child: AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 200),
+                    duration: Motion.click,
+                    curve: Motion.clickCurve,
                     style: TextStyle(
                       fontFamily: Fonts.body,
                       fontSize: 14,
@@ -475,13 +454,14 @@ class _TodoRowState extends State<_TodoRow> with SingleTickerProviderStateMixin 
                 ],
                 AnimatedOpacity(
                   opacity: _hover ? 1 : 0,
-                  duration: const Duration(milliseconds: 150),
+                  duration: Motion.hover,
+                  curve: Motion.hoverCurve,
                   child: Tooltip(
                     message: 'Remove',
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap: _hover && _fade.status != AnimationStatus.reverse ? () => _remove(state) : null,
+                        onTap: _hover && !_leaving ? () => setState(() => _leaving = true) : null,
                         child: Container(
                           width: 24,
                           height: 24,
@@ -515,12 +495,9 @@ class _Check extends StatefulWidget {
 }
 
 class _CheckState extends State<_Check> with TickerProviderStateMixin {
-  late final _fill = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 220),
-    value: widget.done ? 1 : 0,
-  );
-  late final _hover = AnimationController(vsync: this, duration: const Duration(milliseconds: 140));
+  late final _fill = AnimationController(vsync: this, duration: Motion.click, value: widget.done ? 1 : 0);
+  late final _curved = CurvedAnimation(parent: _fill, curve: Motion.clickCurve);
+  late final _hover = AnimationController(vsync: this, duration: Motion.hover);
 
   @override
   void didUpdateWidget(_Check old) {
@@ -535,6 +512,7 @@ class _CheckState extends State<_Check> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _curved.dispose();
     _fill.dispose();
     _hover.dispose();
     super.dispose();
@@ -543,13 +521,14 @@ class _CheckState extends State<_Check> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: AnimatedScale(
-        scale: widget.pressed ? 0.88 : (widget.hover ? 1.06 : 1.0),
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
+      child: PressScale(
+        hover: widget.hover,
+        pressed: widget.pressed,
+        lift: 1.06,
+        dip: 0.88,
         child: CustomPaint(
           size: const Size.square(20),
-          painter: _CheckPainter(fill: _fill, hover: _hover, palette: context.palette),
+          painter: _CheckPainter(fill: _curved, hover: _hover, palette: context.palette),
         ),
       ),
     );
@@ -564,13 +543,10 @@ class _CheckPainter extends CustomPainter {
   final Animation<double> hover;
   final Palette palette;
 
-  static TextPainter? _tick;
-  static Color? _tickColor;
-
   @override
   void paint(Canvas canvas, Size size) {
     final p = palette;
-    final t = Curves.easeOutCubic.transform(fill.value);
+    final t = fill.value;
     final h = hover.value;
     final centre = size.center(Offset.zero);
     final r = size.width / 2;
@@ -597,26 +573,8 @@ class _CheckPainter extends CustomPainter {
       canvas.drawCircle(centre, r, Paint()..color = p.done.withValues(alpha: t));
     }
 
-    // The tick grows in over the second half, as on a ritual square.
-    final into = Curves.easeInOutSine.transform(((fill.value - 0.45) / 0.55).clamp(0.0, 1.0));
-    if (into > 0) {
-      if (_tick == null || _tickColor != p.onAccent) {
-        _tickColor = p.onAccent;
-        _tick = TextPainter(
-          textDirection: TextDirection.ltr,
-          text: TextSpan(
-            text: String.fromCharCode(Icons.check_rounded.codePoint),
-            style: TextStyle(fontFamily: Icons.check_rounded.fontFamily, fontSize: 13, height: 1, color: p.onAccent),
-          ),
-        )..layout();
-      }
-      final g = _tick!;
-      canvas.saveLayer(null, Paint()..color = Colors.white.withValues(alpha: into));
-      canvas.translate(centre.dx, centre.dy);
-      canvas.scale(0.6 + 0.4 * into);
-      g.paint(canvas, Offset(-g.width / 2, -g.height / 2));
-      canvas.restore();
-    }
+    // The tick grows in after the fill, as on a ritual square.
+    paintMark(canvas, centre, Icons.check_rounded, 13, p.onAccent, Motion.incoming.transform(t));
   }
 
   @override

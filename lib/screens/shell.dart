@@ -225,8 +225,8 @@ class _TabBarState extends State<_TabBar> {
       children: [
         if (pill != null)
           AnimatedPositioned(
-            duration: _glide ? const Duration(milliseconds: 420) : Duration.zero,
-            curve: Curves.easeInOutCubic,
+            duration: _glide ? Motion.morph : Duration.zero,
+            curve: Motion.morphCurve,
             left: pill.left,
             top: pill.top,
             width: pill.width,
@@ -310,8 +310,8 @@ class _TabState extends State<_Tab> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
+          duration: Motion.hover,
+          curve: Motion.hoverCurve,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
@@ -323,8 +323,8 @@ class _TabState extends State<_Tab> {
               // Reserves the bold width, so selecting a tab never resizes the bar.
               Visibility.maintain(visible: false, child: Text(widget.label, style: style(FontWeight.w600))),
               AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 360),
-                curve: Curves.easeInOutCubic,
+                duration: Motion.morph,
+                curve: Motion.morphCurve,
                 style: style(selected || widget.isCurrent ? FontWeight.w600 : FontWeight.w500),
                 child: Text(widget.label),
               ),
@@ -596,6 +596,9 @@ class _DayStartEntry extends PopupMenuEntry<String> {
 
   static const hours = [0, 2, 3, 4, 5];
 
+  /// Midnight's button is wider, to fit its label.
+  static int flex(int hour) => hour == 0 ? 7 : 4;
+
   @override
   double get height => 96;
 
@@ -607,6 +610,14 @@ class _DayStartEntry extends PopupMenuEntry<String> {
 }
 
 class _DayStartEntryState extends State<_DayStartEntry> {
+  /// Where the pill sits for [hour]: its left edge and width, as fractions.
+  static Offset _pillAt(int hour) {
+    const hours = _DayStartEntry.hours;
+    final total = hours.fold(0, (sum, h) => sum + _DayStartEntry.flex(h));
+    final before = hours.takeWhile((h) => h != hour).fold(0, (sum, h) => sum + _DayStartEntry.flex(h));
+    return Offset(before / total, _DayStartEntry.flex(hour) / total);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -629,39 +640,63 @@ class _DayStartEntryState extends State<_DayStartEntry> {
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(20)),
-            child: Row(
+            // One pill glides to the chosen hour, like the tab bar's.
+            child: Stack(
               children: [
-                for (final hour in _DayStartEntry.hours)
-                  Expanded(
-                    flex: hour == 0 ? 7 : 4,
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: () => state.setDayStartHour(hour),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeOutCubic,
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(17),
-                            gradient: hour == state.dayStartHour
-                                ? LinearGradient(colors: p.gradient.skip(1).toList())
-                                : LinearGradient(colors: [for (final c in p.gradient.skip(1)) c.withValues(alpha: 0)]),
-                          ),
-                          child: Text(
-                            hourLabel(hour),
-                            style: TextStyle(
-                              fontFamily: Fonts.ui,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: hour == state.dayStartHour ? p.onAccent : p.inkMuted,
+                if (_DayStartEntry.hours.contains(state.dayStartHour))
+                  Positioned.fill(
+                    child: TweenAnimationBuilder<Offset>(
+                      tween: Tween(end: _pillAt(state.dayStartHour)),
+                      duration: Motion.morph,
+                      curve: Motion.morphCurve,
+                      builder: (context, pill, _) => Align(
+                        // pill.dx is the left edge and pill.dy the width, as
+                        // fractions of the row.
+                        alignment: Alignment(pill.dy >= 1 ? 0 : 2 * pill.dx / (1 - pill.dy) - 1, 0),
+                        child: FractionallySizedBox(
+                          widthFactor: pill.dy,
+                          heightFactor: 1,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(17),
+                              gradient: LinearGradient(colors: p.gradient.skip(1).toList()),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
+                Row(
+                  children: [
+                    for (final hour in _DayStartEntry.hours)
+                      Expanded(
+                        flex: _DayStartEntry.flex(hour),
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => state.setDayStartHour(hour),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Center(
+                                child: AnimatedDefaultTextStyle(
+                                  duration: Motion.morph,
+                                  curve: Motion.morphCurve,
+                                  style: TextStyle(
+                                    fontFamily: Fonts.ui,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: hour == state.dayStartHour ? p.onAccent : p.inkMuted,
+                                  ),
+                                  child: Text(hourLabel(hour)),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -684,8 +719,8 @@ class _Toggle extends StatelessWidget {
     // frame, so a theme change recolours it in step with everything else.
     return TweenAnimationBuilder<double>(
       tween: Tween(end: on ? 1 : 0),
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+      duration: Motion.click,
+      curve: Motion.clickCurve,
       builder: (context, t, _) => Container(
         width: 36,
         height: 22,

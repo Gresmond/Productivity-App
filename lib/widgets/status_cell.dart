@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'mark.dart';
 
 /// A single habit-day square. Click to cycle its status; right-click to
 /// clear it.
@@ -34,8 +35,8 @@ class _StatusCellState extends State<StatusCell> with TickerProviderStateMixin {
 
   /// A click changes a square quickly; a new month eases it in step with
   /// the grid's morph, so a whole month of colours doesn't snap in at once.
-  static const _click = (Duration(milliseconds: 220), Curves.easeOutCubic);
-  static const _morph = (Duration(milliseconds: 420), Curves.easeInOutCubic);
+  static const _click = (Motion.click, Motion.clickCurve);
+  static const _morph = (Motion.morph, Motion.morphCurve);
   var _change = _click;
 
   /// The mark being left and the one being moved to; [_progress] runs
@@ -45,7 +46,7 @@ class _StatusCellState extends State<StatusCell> with TickerProviderStateMixin {
   _Look? _to;
   late final _progress = AnimationController(vsync: this, value: 1);
   late final _curved = CurvedAnimation(parent: _progress, curve: _change.$2);
-  late final _hoverAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 140));
+  late final _hoverAnim = AnimationController(vsync: this, duration: Motion.hover);
 
   @override
   void didUpdateWidget(StatusCell old) {
@@ -103,10 +104,11 @@ class _StatusCellState extends State<StatusCell> with TickerProviderStateMixin {
 
     Widget cell = RepaintBoundary(
       key: _squareKey,
-      child: AnimatedScale(
-        scale: _pressed ? 0.91 : (_hover && enabled ? 1.04 : 1.0),
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
+      child: PressScale(
+        hover: _hover && enabled,
+        pressed: _pressed,
+        lift: 1.04,
+        dip: 0.91,
         child: CustomPaint(
           size: Size.square(widget.size),
           painter: _SquarePainter(
@@ -144,8 +146,8 @@ class _StatusCellState extends State<StatusCell> with TickerProviderStateMixin {
         onSecondaryTap: enabled && status != HabitStatus.none ? () => state.clear(widget.day, widget.habit) : null,
         child: AnimatedOpacity(
           opacity: !enabled ? 0.35 : (widget.rest && status == HabitStatus.none ? 0.45 : 1),
-          duration: const Duration(milliseconds: 420),
-          curve: Curves.easeInOutCubic,
+          duration: Motion.morph,
+          curve: Motion.morphCurve,
           child: cell,
         ),
       ),
@@ -185,30 +187,8 @@ class _SquarePainter extends CustomPainter {
   final Animation<double> hover;
   final Palette palette;
 
-  /// Drawn at this size and scaled, so every square shares its glyphs.
+  /// Drawn at this size and scaled, so every square shares its marks.
   static const _s = 34.0;
-
-  /// Laid-out marks by glyph, size and colour (alpha in 32 steps).
-  static final _glyphs = <(int, double, int), TextPainter>{};
-
-  static TextPainter _glyph(IconData icon, double size, Color color) {
-    final quantised = color.withValues(alpha: (color.a * 32).round() / 32);
-    return _glyphs.putIfAbsent((icon.codePoint, size, quantised.toARGB32()), () {
-      return TextPainter(
-        textDirection: TextDirection.ltr,
-        text: TextSpan(
-          text: String.fromCharCode(icon.codePoint),
-          style: TextStyle(
-            fontFamily: icon.fontFamily,
-            package: icon.fontPackage,
-            fontSize: size,
-            height: 1,
-            color: quantised,
-          ),
-        ),
-      )..layout();
-    });
-  }
 
   List<Color> _fill(_Look l, Color empty) =>
       l.base == null ? [empty, empty] : [Color.lerp(l.base, Colors.white, 0.16)!, l.base!];
@@ -216,17 +196,6 @@ class _SquarePainter extends CustomPainter {
   Color _border(_Look l, double h) => l.base == null
       ? Color.lerp(palette.tileBorder.withValues(alpha: 0.7), palette.accent.withValues(alpha: 0.35), h)!
       : Colors.white.withValues(alpha: 0.18);
-
-  void _mark(Canvas canvas, IconData icon, double size, Color color, double amount) {
-    if (amount <= 0) return;
-    final scale = 0.6 + 0.4 * amount;
-    final g = _glyph(icon, size, color.withValues(alpha: color.a * amount));
-    canvas.save();
-    canvas.translate(_s / 2, _s / 2);
-    canvas.scale(scale);
-    g.paint(canvas, Offset(-g.width / 2, -g.height / 2));
-    canvas.restore();
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -269,16 +238,24 @@ class _SquarePainter extends CustomPainter {
         ..color = Color.lerp(_border(from, h), _border(to, h), t)!,
     );
 
-    // The old mark eases out over the first ~55%, the new one in over the last.
-    final out = 1 - Curves.easeInOutSine.transform((t / 0.55).clamp(0.0, 1.0));
-    final into = Curves.easeInOutSine.transform(((t - 0.45) / 0.55).clamp(0.0, 1.0));
-    if (from.icon case final icon? when icon != to.icon) _mark(canvas, icon, _s * 0.54, palette.onAccent, out);
+    // The old mark eases out, then the new one grows in.
+    const centre = Offset(_s / 2, _s / 2);
+    if (from.icon case final icon? when icon != to.icon) {
+      paintMark(canvas, centre, icon, _s * 0.54, palette.onAccent, Motion.outgoing(t));
+    }
     if (to.icon case final icon?) {
-      _mark(canvas, icon, _s * 0.54, palette.onAccent, from.icon == icon ? 1 : into);
+      paintMark(
+        canvas,
+        centre,
+        icon,
+        _s * 0.54,
+        palette.onAccent,
+        from.icon == icon ? 1 : Motion.incoming.transform(t),
+      );
     }
     // A faint plus on a blank square under the pointer.
     final blank = (from.base == null ? 1 - t : 0) + (to.base == null ? t : 0);
-    _mark(canvas, Icons.add_rounded, _s * 0.45, palette.inkMuted.withValues(alpha: 0.4), h * blank);
+    paintMark(canvas, centre, Icons.add_rounded, _s * 0.45, palette.inkMuted.withValues(alpha: 0.4), h * blank);
   }
 
   @override

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/fade_through.dart';
 import '../widgets/progress_ring.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
@@ -203,12 +204,10 @@ class _HabitsCard extends StatelessWidget {
                   children: [
                     TileHeader(title: title),
                     const SizedBox(height: 6),
-                    // Cross-fades when the line changes, left-aligned so the
+                    // Fades through when the line changes, left-aligned so the
                     // old and new lines share their start.
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
+                    FadeThrough(
+                      duration: Motion.click,
                       layoutBuilder: (current, previous) =>
                           Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
                       child: Text(
@@ -257,8 +256,6 @@ class _HoverHighlight extends StatefulWidget {
 }
 
 class _HoverHighlightState extends State<_HoverHighlight> {
-  static const _fade = Duration(milliseconds: 140);
-
   bool _hover = false;
 
   @override
@@ -275,7 +272,8 @@ class _HoverHighlightState extends State<_HoverHighlight> {
             child: IgnorePointer(
               child: AnimatedOpacity(
                 opacity: _hover ? 1 : 0,
-                duration: _fade,
+                duration: Motion.hover,
+                curve: Motion.hoverCurve,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: p.empty.withValues(alpha: 0.4),
@@ -295,7 +293,8 @@ class _HoverHighlightState extends State<_HoverHighlight> {
               child: IgnorePointer(
                 child: AnimatedOpacity(
                   opacity: _hover ? 0 : 1,
-                  duration: _fade,
+                  duration: Motion.hover,
+                  curve: Motion.hoverCurve,
                   child: ColoredBox(color: p.tileBorder.withValues(alpha: 0.5), child: const SizedBox(height: 1)),
                 ),
               ),
@@ -378,15 +377,10 @@ class _HabitRow extends StatelessWidget {
                   : '$streak day streak${best > streak ? '  ·  best $best' : ''}',
               child: SizedBox(
                 width: 44,
-                // A new streak count (or none) cross-fades with a slight pop.
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(anim), child: child),
-                  ),
+                // A new streak count (or none) fades through with a slight pop.
+                child: FadeThrough(
+                  duration: Motion.click,
+                  scaleFrom: 0.85,
                   child: streak > 0
                       ? Container(
                           key: ValueKey(streak),
@@ -457,8 +451,8 @@ class _WeekTrail extends StatelessWidget {
     final status = state.statusOf(past, habit);
     return TweenAnimationBuilder<double>(
       tween: Tween(end: state.isRestDay(past) ? 1 : 0),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeInOutCubic,
+      duration: Motion.morph,
+      curve: Motion.morphCurve,
       builder: (context, r, _) => Container(
         margin: const EdgeInsets.only(left: 3),
         width: 6,
