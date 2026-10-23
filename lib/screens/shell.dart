@@ -646,8 +646,8 @@ class _DayStartEntryState extends State<_DayStartEntry> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(17),
                             gradient: hour == state.dayStartHour
-                                ? LinearGradient(colors: p.gradient.take(2).toList())
-                                : LinearGradient(colors: [for (final c in p.gradient.take(2)) c.withValues(alpha: 0)]),
+                                ? LinearGradient(colors: p.gradient.skip(1).toList())
+                                : LinearGradient(colors: [for (final c in p.gradient.skip(1)) c.withValues(alpha: 0)]),
                           ),
                           child: Text(
                             hourLabel(hour),
@@ -693,7 +693,7 @@ class _Toggle extends StatelessWidget {
         alignment: Alignment.lerp(Alignment.centerLeft, Alignment.centerRight, t),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(11),
-          gradient: LinearGradient(colors: [for (final c in p.gradient.take(2)) Color.lerp(p.empty, c, t)!]),
+          gradient: LinearGradient(colors: [for (final c in p.gradient.skip(1)) Color.lerp(p.empty, c, t)!]),
           border: Border.all(color: p.tileBorder.withValues(alpha: 1 - t)),
         ),
         child: Container(

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -20,8 +22,12 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
   final _focus = FocusNode();
 
   /// Drives every row's glide to its new place when the order changes.
-  late final _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 450), value: 1);
-  late final _curved = CurvedAnimation(parent: _slide, curve: Curves.easeInOutCubic);
+  /// The glide waits for the tick to fill, so the mark lands first.
+  late final _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 640), value: 1);
+  late final _curved = CurvedAnimation(
+    parent: _slide,
+    curve: const Interval(0.3, 1, curve: Curves.easeInOutCubic),
+  );
   List<int> _order = const [];
   int _generation = 0;
 
@@ -91,15 +97,8 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
                             Container(
                               width: 32,
                               height: 32,
-                              decoration: BoxDecoration(
-                                color: p.empty.withValues(alpha: 0.6),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.wb_sunny_outlined,
-                                size: 16,
-                                color: p.inkMuted.withValues(alpha: 0.7),
-                              ),
+                              decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.6), shape: BoxShape.circle),
+                              child: Icon(Icons.wb_sunny_outlined, size: 16, color: p.inkMuted.withValues(alpha: 0.7)),
                             ),
                             const SizedBox(height: 6),
                             Text(
@@ -120,6 +119,8 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
                     child: _SlidingColumn(
                       progress: _curved,
                       generation: _generation,
+                      lift: p.tile,
+                      shadow: p.shadow,
                       children: [
                         // Each row drawn once and moved as a picture while it glides.
                         for (final item in items)
@@ -144,11 +145,7 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.add_rounded,
-                  size: 18,
-                  color: _focus.hasFocus ? p.accent : p.inkMuted,
-                ),
+                Icon(Icons.add_rounded, size: 18, color: _focus.hasFocus ? p.accent : p.inkMuted),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
@@ -159,10 +156,7 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
                       isDense: true,
                       border: InputBorder.none,
                       hintText: 'Add a task',
-                      hintStyle: TextStyle(
-                        fontFamily: Fonts.body,
-                        color: p.inkMuted.withValues(alpha: 0.65),
-                      ),
+                      hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.65)),
                       contentPadding: const EdgeInsets.symmetric(vertical: 9),
                     ),
                     onSubmitted: (_) => _submit(state),
@@ -189,7 +183,13 @@ bool _sameOrder(List<int> a, List<int> b) {
 /// glides from where it was drawn to its new place. Paint-only: children
 /// are laid out once at their new places and only drawn somewhere else.
 class _SlidingColumn extends MultiChildRenderObjectWidget {
-  const _SlidingColumn({required this.progress, required this.generation, required super.children});
+  const _SlidingColumn({
+    required this.progress,
+    required this.generation,
+    required this.lift,
+    required this.shadow,
+    required super.children,
+  });
 
   /// Runs 0 to 1 for each reorder.
   final Animation<double> progress;
@@ -198,13 +198,19 @@ class _SlidingColumn extends MultiChildRenderObjectWidget {
   /// is on screen, even one still moving from the last change.
   final int generation;
 
+  /// The card colour under a row that's lifted while it glides, and its shadow.
+  final Color lift, shadow;
+
   @override
-  _RenderSlidingColumn createRenderObject(BuildContext context) => _RenderSlidingColumn(progress, generation);
+  _RenderSlidingColumn createRenderObject(BuildContext context) =>
+      _RenderSlidingColumn(progress, generation, lift, shadow);
 
   @override
   void updateRenderObject(BuildContext context, _RenderSlidingColumn renderObject) => renderObject
     ..progress = progress
-    ..generation = generation;
+    ..generation = generation
+    ..lift = lift
+    ..shadow = shadow;
 }
 
 class _SlideParentData extends ContainerBoxParentData<RenderBox> {
@@ -217,7 +223,20 @@ class _RenderSlidingColumn extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _SlideParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _SlideParentData> {
-  _RenderSlidingColumn(this._progress, this._generation);
+  _RenderSlidingColumn(this._progress, this._generation, this._lift, this._shadow);
+
+  Color _lift, _shadow;
+  set lift(Color value) {
+    if (value == _lift) return;
+    _lift = value;
+    markNeedsPaint();
+  }
+
+  set shadow(Color value) {
+    if (value == _shadow) return;
+    _shadow = value;
+    markNeedsPaint();
+  }
 
   Animation<double> _progress;
   set progress(Animation<double> value) {
@@ -276,16 +295,43 @@ class _RenderSlidingColumn extends RenderBox
   @override
   void paint(PaintingContext context, Offset offset) {
     final t = _progress.value;
+    // The row going furthest (the one just ticked) rides above the rest on
+    // the card's colour, so rows never show through each other as they pass.
+    var furthest = 0.0;
+    for (var child = firstChild; child != null; child = (child.parentData! as _SlideParentData).nextSibling) {
+      final data = child.parentData! as _SlideParentData;
+      furthest = math.max(furthest, (data.target! - data.from!).abs());
+    }
+    final lifted = <RenderBox>[];
     var child = firstChild;
     while (child != null) {
       final data = child.parentData! as _SlideParentData;
+      final distance = (data.target! - data.from!).abs();
       final y = t >= 1 ? data.target! : data.from! + (data.target! - data.from!) * t;
       if (t >= 1) data.from = data.target;
       data.painted = y;
       // Hit testing and tooltips follow the row to where it's drawn.
       data.offset = Offset(0, y);
-      context.paintChild(child, offset + data.offset);
+      if (t < 1 && distance > 0.5 && distance == furthest) {
+        lifted.add(child);
+      } else {
+        context.paintChild(child, offset + data.offset);
+      }
       child = data.nextSibling;
+    }
+    final rise = math.sin(math.pi * t);
+    for (final row in lifted) {
+      final rect = (offset + (row.parentData! as _SlideParentData).offset) & row.size;
+      final rrect = RRect.fromRectAndRadius(rect.deflate(1), const Radius.circular(10));
+      final shadow = BoxShadow(
+        color: _shadow.withValues(alpha: 0.14 * rise),
+        blurRadius: 12,
+        offset: const Offset(0, 3),
+      );
+      context.canvas
+        ..drawRRect(rrect.shift(shadow.offset), shadow.toPaint())
+        ..drawRRect(rrect, Paint()..color = _lift);
+      context.paintChild(row, rect.topLeft);
     }
   }
 
@@ -306,6 +352,7 @@ class _TodoRow extends StatefulWidget {
 
 class _TodoRowState extends State<_TodoRow> {
   bool _hover = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -315,9 +362,15 @@ class _TodoRowState extends State<_TodoRow> {
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+      onExit: (_) => setState(() {
+        _hover = false;
+        _pressed = false;
+      }),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
         onTap: () => state.toggleTodo(item),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
@@ -329,7 +382,7 @@ class _TodoRowState extends State<_TodoRow> {
           ),
           child: Row(
             children: [
-              _Check(done: item.done),
+              _Check(done: item.done, hover: _hover, pressed: _pressed),
               const SizedBox(width: 11),
               Expanded(
                 child: AnimatedDefaultTextStyle(
@@ -385,10 +438,7 @@ class _TodoRowState extends State<_TodoRow> {
                       child: Container(
                         width: 24,
                         height: 24,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: p.empty.withValues(alpha: 0.8),
-                        ),
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: p.empty.withValues(alpha: 0.8)),
                         child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
                       ),
                     ),
@@ -403,40 +453,124 @@ class _TodoRowState extends State<_TodoRow> {
   }
 }
 
-class _Check extends StatelessWidget {
-  const _Check({required this.done});
+/// The round tick, animated like a ritual square: the fill blends in, the
+/// tick grows in after it, and it dips when pressed and lifts on hover.
+class _Check extends StatefulWidget {
+  const _Check({required this.done, required this.hover, required this.pressed});
 
   final bool done;
+  final bool hover;
+  final bool pressed;
+
+  @override
+  State<_Check> createState() => _CheckState();
+}
+
+class _CheckState extends State<_Check> with TickerProviderStateMixin {
+  late final _fill = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: widget.done ? 1 : 0,
+  );
+  late final _hover = AnimationController(vsync: this, duration: const Duration(milliseconds: 140));
+
+  @override
+  void didUpdateWidget(_Check old) {
+    super.didUpdateWidget(old);
+    if (widget.done != old.done) {
+      widget.done ? _fill.forward() : _fill.reverse();
+    }
+    if (widget.hover != old.hover) {
+      widget.hover ? _hover.forward() : _hover.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _fill.dispose();
+    _hover.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     return RepaintBoundary(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: AnimatedScale(
+        scale: widget.pressed ? 0.88 : (widget.hover ? 1.06 : 1.0),
+        duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: done ? p.done : null,
-          border: done
-              ? null
-              : Border.all(color: p.inkMuted.withValues(alpha: 0.38), width: 1.5),
-          boxShadow: done
-              ? [
-                  BoxShadow(
-                    color: p.done.withValues(alpha: 0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
+        child: CustomPaint(
+          size: const Size.square(20),
+          painter: _CheckPainter(fill: _fill, hover: _hover, palette: context.palette),
         ),
-        child: done
-            ? Icon(Icons.check_rounded, size: 13, color: p.onAccent)
-            : null,
       ),
     );
   }
+}
+
+class _CheckPainter extends CustomPainter {
+  _CheckPainter({required this.fill, required this.hover, required this.palette})
+    : super(repaint: Listenable.merge([fill, hover]));
+
+  final Animation<double> fill;
+  final Animation<double> hover;
+  final Palette palette;
+
+  static TextPainter? _tick;
+  static Color? _tickColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = palette;
+    final t = Curves.easeOutCubic.transform(fill.value);
+    final h = hover.value;
+    final centre = size.center(Offset.zero);
+    final r = size.width / 2;
+
+    if (t > 0) {
+      final shadow = BoxShadow(
+        color: p.done.withValues(alpha: (0.3 + 0.1 * h) * t),
+        blurRadius: 6,
+        offset: const Offset(0, 2),
+      );
+      canvas.drawCircle(centre + shadow.offset, r, shadow.toPaint());
+    }
+    // The ring fades as the fill arrives, so there's never a hard swap.
+    final ring = Color.lerp(p.inkMuted.withValues(alpha: 0.38), p.accent.withValues(alpha: 0.6), h)!;
+    canvas.drawCircle(
+      centre,
+      r - 0.75,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = ring.withValues(alpha: ring.a * (1 - t)),
+    );
+    if (t > 0) {
+      canvas.drawCircle(centre, r, Paint()..color = p.done.withValues(alpha: t));
+    }
+
+    // The tick grows in over the second half, as on a ritual square.
+    final into = Curves.easeInOutSine.transform(((fill.value - 0.45) / 0.55).clamp(0.0, 1.0));
+    if (into > 0) {
+      if (_tick == null || _tickColor != p.onAccent) {
+        _tickColor = p.onAccent;
+        _tick = TextPainter(
+          textDirection: TextDirection.ltr,
+          text: TextSpan(
+            text: String.fromCharCode(Icons.check_rounded.codePoint),
+            style: TextStyle(fontFamily: Icons.check_rounded.fontFamily, fontSize: 13, height: 1, color: p.onAccent),
+          ),
+        )..layout();
+      }
+      final g = _tick!;
+      canvas.saveLayer(null, Paint()..color = Colors.white.withValues(alpha: into));
+      canvas.translate(centre.dx, centre.dy);
+      canvas.scale(0.6 + 0.4 * into);
+      g.paint(canvas, Offset(-g.width / 2, -g.height / 2));
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CheckPainter old) => old.palette != palette || old.fill != fill || old.hover != hover;
 }

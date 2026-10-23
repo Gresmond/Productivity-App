@@ -140,8 +140,8 @@ class PaletteRecipe {
       inkMuted: _neutral(_dark ? 0.73 : 0.52, 2),
       accent: Oklch(accentL, accentC, accentHue).toColor(),
       onAccent: onAccent,
-      // A vivid theme's gradient runs in sky order.
-      gradient: (vivid ? [done, missed, other] : [done, other, missed]).map((c) {
+      // Runs from missed through other to done, so it ends on the goal.
+      gradient: [missed, other, done].map((c) {
         final o = Oklch.of(c);
         return Oklch(o.l, o.c * 1.1, o.h).toColor();
       }).toList(),

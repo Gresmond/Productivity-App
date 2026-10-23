@@ -71,11 +71,14 @@ class _RingPainter extends CustomPainter {
 
     if (progress <= 0) return;
     final sweep = math.pi * 2 * progress;
+    // The gradient spans just the arc, so however far it's got it ends on
+    // done. It starts a cap's width early so the round start cap is
+    // coloured too.
+    final cap = stroke / 2 / (arcRect.width / 2);
     final shader = SweepGradient(
-      startAngle: 0,
-      endAngle: math.pi * 2,
-      colors: [...p.gradient, p.gradient.first],
-      transform: const GradientRotation(-math.pi / 2),
+      endAngle: math.min(sweep + 2 * cap, math.pi * 2),
+      colors: p.gradient,
+      transform: GradientRotation(-math.pi / 2 - cap),
     ).createShader(rect);
 
     // Soft, clean ambient glow under the arc

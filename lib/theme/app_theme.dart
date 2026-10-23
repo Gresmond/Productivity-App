@@ -53,7 +53,8 @@ class Palette extends ThemeExtension<Palette> {
   /// Text and icons drawn on the gradient or a status colour.
   final Color onAccent;
 
-  /// Signature gradient for selected tabs, headers and the progress ring.
+  /// Signature gradient for selected tabs, headers and the progress ring:
+  /// missed, other, then done, so it always ends on done.
   /// Always three stops, so themes can blend into each other.
   final List<Color> gradient;
 
