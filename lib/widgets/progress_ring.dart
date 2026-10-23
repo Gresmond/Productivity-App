@@ -193,16 +193,17 @@ class _RingPainter extends CustomPainter {
         ..shader = shader,
     );
 
-    // The done colour washing round over it, its round leading cap the
-    // crest of the wave. It starts flat on the gradient's seam, where the
-    // colour behind is already done; a round start cap there let the
-    // gradient's first colour peek out at its corners until the lap closed.
+    // The gradient's done end washing round over it, its round leading cap
+    // the crest of the wave. It starts flat a little behind the gradient's
+    // seam, over colour that already matches it: a round start cap let the
+    // gradient's first colour peek out at its corners, and a flat edge right
+    // on the seam let it bleed through as a hairline.
     if (wash > 0 && solid > 0) {
       // One layer, so where the crest overlaps the arc it isn't doubled
       // while the colour fades out.
       canvas.saveLayer(rect.inflate(stroke), Paint()..color = Color.fromRGBO(0, 0, 0, solid));
-      final washPaint = Paint()..color = p.done;
-      final start = -math.pi / 2 - cap;
+      final washPaint = Paint()..color = p.gradient.last;
+      final start = -math.pi / 2 - 3 * cap;
       final end = start + sweep * wash;
       canvas.drawArc(
         arcRect,
