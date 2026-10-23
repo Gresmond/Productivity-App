@@ -23,25 +23,6 @@ jobs:
           flutter-version: 3.47.7
           cache: true
 
-      # The trial fonts are committed only in encrypted form.
-      - name: Decrypt fonts
-        env:
-          FONTS_PASSPHRASE: ${{ secrets.FONTS_PASSPHRASE }}
-        # Decrypt to a file first: macOS tar happily "extracts" empty input,
-        # which would hide a gpg failure.
-        run: |
-          command -v gpg >/dev/null || brew install gnupg
-          if [ -z "$FONTS_PASSPHRASE" ]; then
-            echo "::error title=Fonts::The FONTS_PASSPHRASE secret is empty or missing."
-            exit 1
-          fi
-          if ! printf '%s' "$FONTS_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 -d -o fonts.tar.gz fonts.tar.gz.gpg 2>gpg.log; then
-            echo "::error title=Fonts::Could not decrypt fonts: $(tr '\n' ' ' < gpg.log)"
-            exit 1
-          fi
-          tar -xzf fonts.tar.gz
-          echo "::notice title=Fonts::Unpacked $(find assets/fonts -type f | wc -l | tr -d ' ') font files."
-
       # On failure, repeat the error lines and the end of the output as
       # annotations, which (unlike the log) are visible without signing in.
       - name: Build app

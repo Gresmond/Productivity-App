@@ -47,8 +47,6 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# Trial fonts copied from ~/.local/share/fonts; not licensed for redistribution
+# Trial fonts copied from ~/.local/share/fonts. Only the files listed in
+# pubspec.yaml are committed (force-added); the rest stay local.
 /assets/fonts/
-
-# Password for fonts.tar.gz.gpg; also stored as the FONTS_PASSPHRASE GitHub secret
-/fonts.passphrase
