@@ -60,8 +60,9 @@ class Palette extends ThemeExtension<Palette> {
   /// Always three stops, so themes can blend into each other.
   final List<Color> gradient;
 
-  /// Solid fill for the current day's tab in the month view; kept apart
-  /// from the status colours so it never reads as a ticked box.
+  /// Solid fill for the current day's tab in the month view: a fourth hue
+  /// of the status harmony, lighter than done, so it never reads as a
+  /// ticked box.
   final Color today;
 
   /// The day letter and number drawn on [today].

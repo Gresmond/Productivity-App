@@ -3,24 +3,28 @@ import 'package:flutter/material.dart';
 import 'app_theme.dart';
 import 'oklch.dart';
 
-/// How the three status hues sit around the key hue on the colour wheel.
+/// How the three status hues, and today's, sit around the key hue on the
+/// colour wheel.
 enum Harmony {
-  /// Neighbours 45° either side: calm and cohesive.
-  analogous(45, -45),
+  /// Neighbours 45° either side: calm and cohesive. Today carries the run
+  /// on one more step.
+  analogous(45, -45, -90),
 
   /// The two hues either side of the key's opposite: lively, well apart.
-  splitComplementary(150, 210),
+  /// Today takes the opposite itself.
+  splitComplementary(150, 210, 180),
 
-  /// Three hues 120° apart: the most separation.
-  triadic(120, 240),
+  /// Three hues 120° apart: the most separation. Today sits halfway
+  /// between the key and its neighbour, on the same 60° grid.
+  triadic(120, 240, 300),
 
   /// Neighbours along a fifth of the wheel, in the order a sky fades at
-  /// dusk: orange, then crimson, then magenta.
-  sky(-40, -75);
+  /// dusk: orange, then crimson, then magenta, and today the violet after.
+  sky(-40, -75, -110);
 
-  const Harmony(this.first, this.second);
+  const Harmony(this.first, this.second, this.today);
 
-  final double first, second;
+  final double first, second, today;
 }
 
 /// A theme as a few numbers; [build] turns it into a [Palette].
@@ -33,7 +37,9 @@ enum Harmony {
 /// above [statusLightness] and missed below, so they stay apart for
 /// colour-blind eyes, which mostly see lightness.
 /// Done takes the key hue and missed the other hue nearest red, so it
-/// still reads as a warning.
+/// still reads as a warning. Today is a fourth hue of the same harmony,
+/// one lightness step above done, so it belongs to the set without
+/// passing for any status.
 @immutable
 class PaletteRecipe {
   const PaletteRecipe({
@@ -111,11 +117,7 @@ class PaletteRecipe {
     // three, else the darkest ink.
     final white = const Color(0xFFFFFFFF);
     final onAccent = [done, missed, other].every((c) => contrast(white, c) >= 3) ? white : _neutral(0.22, 2);
-    // Light themes mark today with a soft wash of the key hue under dark
-    // text; dark themes with the key hue itself.
-    final today = _dark
-        ? Oklch(onAccent == white ? 0.50 : 0.84, statusChroma, keyHue).toColor()
-        : Oklch(0.89, statusChroma * 0.5, keyHue).toColor();
+    final today = status(turn(keyHue, harmony.today), 2);
     final darkInk = _neutral(0.22, 2);
     // A vivid theme's accent takes whichever status hue keeps the most
     // chroma at the accent's lightness, so dark gold text never turns brown.
