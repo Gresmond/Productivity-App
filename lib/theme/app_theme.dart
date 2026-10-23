@@ -187,7 +187,26 @@ const sunsetPalette = Palette(
   shadow: Color(0xFF7E3B4B),
 );
 
-const palettes = [mainPalette, darkPalette, pastelPalette, sagePalette, sunsetPalette];
+/// The app icon: a deep violet sky, a slate-blue moon and a white corona.
+const eclipsePalette = Palette(
+  name: 'Eclipse',
+  brightness: Brightness.dark,
+  background: Color(0xFF170E33),
+  tile: Color(0xFF22164A),
+  tileBorder: Color(0xFF35286A),
+  ink: Color(0xFFF5F3FC),
+  inkMuted: Color(0xFF9DA4C4),
+  accent: Color(0xFFB7AEF5),
+  onAccent: Color(0xFFFFFFFF),
+  gradient: [Color(0xFF5B3FC0), Color(0xFF6A62B4), Color(0xFF6F7B99)],
+  done: Color(0xFF8E9CDB),
+  missed: Color(0xFFD8709F),
+  other: Color(0xFF9C7FEA),
+  empty: Color(0xFF2B1F57),
+  shadow: Color(0xFF000000),
+);
+
+const palettes = [mainPalette, darkPalette, pastelPalette, sagePalette, sunsetPalette, eclipsePalette];
 
 Palette paletteNamed(String? name) =>
     palettes.firstWhere((p) => p.name == name, orElse: () => mainPalette);
