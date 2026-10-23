@@ -49,3 +49,6 @@ app.*.map.json
 
 # Trial fonts copied from ~/.local/share/fonts; not licensed for redistribution
 /assets/fonts/
+
+# Password for fonts.tar.gz.gpg; also stored as the FONTS_PASSPHRASE GitHub secret
+/fonts.passphrase
