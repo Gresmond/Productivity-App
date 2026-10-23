@@ -136,6 +136,7 @@ class AppState extends ChangeNotifier {
     themeNotifier.value = themeName;
     restWeekends = store.setting('restWeekends') == '1';
     dayStartHour = int.tryParse(store.setting('dayStartHour') ?? '') ?? 0;
+    sleepHabits = store.sleepHabits();
     _streaks.clear();
     _startDay();
   }
@@ -189,6 +190,9 @@ class AppState extends ChangeNotifier {
 
   /// Today's month's rituals.
   List<Habit> get habits => habitsFor(today.year, today.month);
+
+  /// The sleep schedule, the same in every month.
+  late List<Habit> sleepHabits = store.sleepHabits();
 
   /// A month's ritual list. A month between your first list and today is
   /// saved as a copy of the month before it. Future months, and months
@@ -298,7 +302,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  int doneOn(DateTime day) =>
+  int doneOn(DateTime day, List<Habit> habits) =>
       habits.where((h) => statusOf(day, h) == HabitStatus.done).length;
 
   /// Consecutive done days ending today (or yesterday, if today is still
@@ -398,10 +402,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// First run: the ritual list, 1 October and the to-dos from the spreadsheet.
+  /// First run: the ritual list (the sleep schedule is made with the database), 1 October and the to-dos from the spreadsheet.
   void _seed() {
     const names = [
-      'Get up at 8',
       'Clean room',
       'No phone until breakfast',
       'Morning walk',
@@ -409,14 +412,9 @@ class AppState extends ChangeNotifier {
       'Check calendar and alarms',
       'Weights',
       'Creatine, min + fin, vit. D, protein powder',
-      'Wind down at 8:45',
-      'Journal',
-      'Meditate',
-      'Screens, shower finished by 9:30 pm',
       'Read',
-      'Bed by 10:30 pm',
     ];
-    const oct1 = [0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0];
+    const oct1 = [1, 0, 0, 1, 1, 0, 0, 0];
     for (final (i, name) in names.indexed) {
       final h = store.addHabit(2026, 10, name);
       store.setEntry('2026-10-01', h.id, oct1[i] == 1 ? HabitStatus.done : HabitStatus.missed);

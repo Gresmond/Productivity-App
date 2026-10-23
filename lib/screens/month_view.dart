@@ -63,59 +63,89 @@ class _MonthViewState extends State<MonthView> {
       body = _Grid(year: year, month: month, habits: habits, nameWidth: _nameWidth, height: height);
     }
 
+    final sleep = state.sleepHabits;
+    final header = TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: p.inkMuted);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-      child: Tile(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ritualsTile(label, header, future, body, habits.isEmpty),
+          const SizedBox(height: 20),
+          // Below the fold: sized like the rituals' grid, so its squares and
+          // days line up with theirs.
+          Tile(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                FadeThrough(
-                  duration: const Duration(milliseconds: 260),
-                  layoutBuilder: (current, previous) =>
-                      Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
-                  child: Text(
-                    label,
-                    key: ValueKey(label),
-                    style: TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w500, color: p.inkMuted),
-                  ),
-                ),
-                const Spacer(),
-                // Kept in place for future months, just faded, so the header
-                // row doesn't change height between months.
-                IgnorePointer(
-                  ignoring: future,
-                  child: AnimatedOpacity(
-                    opacity: future ? 0 : 1,
-                    duration: const Duration(milliseconds: 420),
-                    curve: Curves.easeInOutCubic,
-                    child: _PillButton(
-                      label: _editing ? 'Done' : 'Edit rituals',
-                      icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
-                      filled: _editing,
-                      onTap: () => setState(() => _editing = !_editing),
-                    ),
-                  ),
+                Text('SLEEP SCHEDULE  ·  ${sleep.length}', style: header),
+                const SizedBox(height: 22),
+                _Grid(
+                  year: year,
+                  month: month,
+                  habits: sleep,
+                  nameWidth: _nameWidth,
+                  height: height,
+                  fitRows: habits.isEmpty ? sleep.length : habits.length,
+                  legend: false,
+                  doneLabel: 'of the logged schedule kept',
                 ),
               ],
             ),
-            const SizedBox(height: 22),
-            // The card stays still. Moving between months morphs the grid in
-            // place (see [_Grid]); only switching to the editor fades. The
-            // height eases when the new month has a different number of rituals.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOutCubic,
-              alignment: Alignment.topCenter,
-              clipBehavior: Clip.none,
-              child: FadeThrough(
-                layoutBuilder: FadeThrough.sizeToCurrent,
-                child: KeyedSubtree(key: ValueKey((_editing, habits.isEmpty)), child: body),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ritualsTile(String label, TextStyle header, bool future, Widget body, bool empty) {
+    return Tile(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              FadeThrough(
+                duration: const Duration(milliseconds: 260),
+                layoutBuilder: (current, previous) =>
+                    Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                child: Text(label, key: ValueKey(label), style: header),
               ),
+              const Spacer(),
+              // Kept in place for future months, just faded, so the header
+              // row doesn't change height between months.
+              IgnorePointer(
+                ignoring: future,
+                child: AnimatedOpacity(
+                  opacity: future ? 0 : 1,
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeInOutCubic,
+                  child: _PillButton(
+                    label: _editing ? 'Done' : 'Edit rituals',
+                    icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
+                    filled: _editing,
+                    onTap: () => setState(() => _editing = !_editing),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          // The card stays still. Moving between months morphs the grid in
+          // place (see [_Grid]); only switching to the editor fades. The
+          // height eases when the new month has a different number of rituals.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.none,
+            child: FadeThrough(
+              layoutBuilder: FadeThrough.sizeToCurrent,
+              child: KeyedSubtree(key: ValueKey((_editing, empty)), child: body),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -135,6 +165,9 @@ class _Grid extends StatefulWidget {
     required this.habits,
     required this.nameWidth,
     required this.height,
+    this.fitRows,
+    this.legend = true,
+    this.doneLabel = 'of logged rituals done',
   });
 
   final int year;
@@ -144,6 +177,14 @@ class _Grid extends StatefulWidget {
 
   /// The page's height: squares grow until the grid would need scrolling.
   final double height;
+
+  /// How many rows the squares are sized to fit on the page, when not
+  /// this grid's own: a second grid takes the first one's square size.
+  final int? fitRows;
+
+  /// Whether to show what the colours mean, beside the percentage.
+  final bool legend;
+  final String doneLabel;
 
   @override
   State<_Grid> createState() => _GridState();
@@ -233,7 +274,8 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
         // month to month and only their places animate.
         double colFor(double days) => (gridWidth(days) - nameWidth) / days;
         final width = gridWidth(dayCount.toDouble());
-        final byHeight = habits.isEmpty ? _maxCell : (widget.height - _chrome) / habits.length - 5;
+        final fitRows = widget.fitRows ?? habits.length;
+        final byHeight = fitRows == 0 ? _maxCell : (widget.height - _chrome) / fitRows - 5;
         final cell = [colFor(31) - 6, byHeight, _maxCell].reduce((a, b) => a < b ? a : b).clamp(_minCol - 6, _maxCell);
         final columns = [
           for (var d = 1; d <= 31; d++)
@@ -330,9 +372,11 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
             const SizedBox(height: 26),
             Row(
               children: [
-                _Legend(color: p.done, label: 'Done', icon: Icons.check_rounded),
-                _Legend(color: p.missed, label: 'Not done', icon: Icons.close_rounded),
-                _Legend(color: p.other, label: 'Other', icon: Icons.remove_rounded),
+                if (widget.legend) ...[
+                  _Legend(color: p.done, label: 'Done', icon: Icons.check_rounded),
+                  _Legend(color: p.missed, label: 'Not done', icon: Icons.close_rounded),
+                  _Legend(color: p.other, label: 'Other', icon: Icons.remove_rounded),
+                ],
                 const Spacer(),
                 AnimatedOpacity(
                   opacity: logged > 0 ? 1 : 0,
@@ -365,7 +409,7 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'of logged rituals done',
+                          widget.doneLabel,
                           style: TextStyle(
                             fontFamily: Fonts.ui,
                             fontSize: 12.5,
@@ -668,7 +712,7 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
             // A long name wraps onto a second line, set a little tighter so
             // the row barely grows.
             child: Tooltip(
-              message: widget.habit.name,
+              message: widget.habit.description ?? widget.habit.name,
               waitDuration: const Duration(milliseconds: 600),
               child: Text(
                 widget.habit.name,

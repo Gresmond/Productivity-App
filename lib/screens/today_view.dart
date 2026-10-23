@@ -11,8 +11,8 @@ import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
 import '../widgets/todo_panel.dart';
 
-/// Three columns that exactly fill the window: rituals, today's to-dos, and
-/// week / month / journal. Only a card whose list outgrows it scrolls.
+/// Three columns that exactly fill the window: rituals over the sleep
+/// schedule, today's to-dos, and week / month / journal. Only a card whose list outgrows it scrolls.
 class TodayView extends StatelessWidget {
   const TodayView({super.key});
 
@@ -30,7 +30,7 @@ class TodayView extends StatelessWidget {
         Widget content = Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Expanded(flex: 11, child: _HabitsCard()),
+            const Expanded(flex: 11, child: _HabitColumn()),
             const SizedBox(width: _gap),
             const Expanded(flex: 9, child: TodoPanel(scope: TodoScope.today)),
             const SizedBox(width: _gap),
@@ -74,8 +74,50 @@ class TodayView extends StatelessWidget {
   }
 }
 
+/// The rituals' card with the sleep schedule's below it. Their rows share
+/// the column's height evenly, so rows are the same height in both.
+class _HabitColumn extends StatelessWidget {
+  const _HabitColumn();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final rituals = state.habits, sleep = state.sleepHabits;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final rows = constraints.maxHeight - 2 * _HabitsCard.chrome - TodayView._gap;
+        final count = rituals.length + sleep.length;
+        final share = count == 0 ? _HabitsCard._maxRow : rows / count;
+        final sleepHeight = _HabitsCard.chrome + sleep.length * share.clamp(_HabitsCard._minRow, _HabitsCard._maxRow);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _HabitsCard(title: 'Daily rituals', habits: rituals, allDone: 'Every ritual done. Beautiful.'),
+            ),
+            const SizedBox(height: TodayView._gap),
+            SizedBox(
+              height: sleepHeight,
+              child: _HabitsCard(title: 'Sleep schedule', habits: sleep, allDone: 'Schedule kept. Sleep well.'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _HabitsCard extends StatelessWidget {
-  const _HabitsCard();
+  const _HabitsCard({required this.title, required this.habits, required this.allDone});
+
+  final String title;
+  final List<Habit> habits;
+
+  /// The line under the title once every one is done.
+  final String allDone;
+
+  /// The card's height less its rows: padding, header and gap.
+  static const chrome = 22.0 + 60 + 10 + 12;
 
   static const _minRow = 34.0, _maxRow = 52.0;
 
@@ -140,11 +182,10 @@ class _HabitsCard extends StatelessWidget {
     final p = context.palette;
     final state = AppScope.of(context);
     final day = state.today;
-    final habits = state.habits;
-    final done = state.doneOn(day);
+    final done = state.doneOn(day, habits);
     final total = habits.length;
     final subtitle = done == total && total > 0
-        ? 'Every ritual done. Beautiful.'
+        ? allDone
         : state.isRestDay(day)
         ? 'Rest day. Nothing you have to do.'
         : '${total - done} still to go today';
@@ -160,7 +201,7 @@ class _HabitsCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const TileHeader(title: 'Daily rituals'),
+                    TileHeader(title: title),
                     const SizedBox(height: 6),
                     // Cross-fades when the line changes, left-aligned so the
                     // old and new lines share their start.
@@ -311,7 +352,7 @@ class _HabitRow extends StatelessWidget {
           children: [
             Expanded(
               child: Tooltip(
-                message: habit.name,
+                message: habit.description ?? habit.name,
                 waitDuration: const Duration(milliseconds: 600),
                 child: Text(
                   habit.name,
@@ -517,8 +558,9 @@ class _JournalCardState extends State<_JournalCard> {
   }
 }
 
-/// Shows the journal's folder in the file manager. Each day is a Markdown
-/// file there, so entries can be read and kept without the app.
+/// Shows the journal's folder in Dolphin (Finder on a Mac), with the day's
+/// file selected once it exists. Each day is a Markdown file there, so
+/// entries can be read and kept without the app.
 class _OpenFolderButton extends StatelessWidget {
   const _OpenFolderButton(this.file);
 
@@ -527,7 +569,13 @@ class _OpenFolderButton extends StatelessWidget {
   Future<void> _open() async {
     final folder = file.parent;
     await folder.create(recursive: true);
-    await Process.run(Platform.isMacOS ? 'open' : 'xdg-open', [folder.path]);
+    final exists = file.existsSync();
+    if (Platform.isMacOS) {
+      await Process.run('open', exists ? ['-R', file.path] : [folder.path]);
+    } else {
+      // Detached: Dolphin keeps running after it opens, and on its own.
+      await Process.start('dolphin', exists ? ['--select', file.path] : [folder.path], mode: ProcessStartMode.detached);
+    }
   }
 
   @override
@@ -536,7 +584,7 @@ class _OpenFolderButton extends StatelessWidget {
     final home = Platform.environment['HOME'];
     final shown = home != null && file.path.startsWith(home) ? '~${file.path.substring(home.length)}' : file.path;
     return Tooltip(
-      message: 'Saved as $shown\nClick to open the folder',
+      message: 'Saved as $shown\nClick to show it in its folder',
       child: IconButton(
         // Small enough not to make this card's header taller than the others.
         constraints: BoxConstraints.tight(const Size.square(24)),

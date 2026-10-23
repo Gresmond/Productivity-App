@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:eclipse/app_state.dart';
 import 'package:eclipse/data/backups.dart';
 import 'package:eclipse/data/journal_files.dart';
@@ -69,7 +70,7 @@ void main() {
 
       var store = Store.open(path);
       var state = AppState(store, clock: () => day);
-      final meditate = state.habits.firstWhere((h) => h.name == 'Meditate');
+      final meditate = state.habits.firstWhere((h) => h.name == 'Read');
       state.cycle(day, meditate); // done
       state.cycle(day, meditate); // not done
       state.cycle(day, meditate); // other
@@ -81,11 +82,12 @@ void main() {
 
       store = Store.open(path);
       state = AppState(store, clock: () => day);
-      final again = state.habits.firstWhere((h) => h.name == 'Meditate');
-      expect(state.habits, hasLength(14), reason: 'seed runs only once');
+      final again = state.habits.firstWhere((h) => h.name == 'Read');
+      expect(state.habits, hasLength(8), reason: 'seed runs only once');
+      expect(state.sleepHabits.map((h) => h.name), ['Rise Early', 'Unwind', 'Screen Curfew', 'Sleep Early']);
       expect(state.statusOf(day, again), HabitStatus.other);
       expect(state.noteOf(day, again), 'Sick');
-      expect(state.statusOf(DateTime(2026, 10, 1), state.habits.first), HabitStatus.missed);
+      expect(state.statusOf(DateTime(2026, 10, 1), state.habits[1]), HabitStatus.missed);
       expect(state.todos[TodoScope.week]!.map((t) => t.text), ['Book dentist']);
       expect(state.journalOf(day), 'A good day.');
       expect(state.themeName, 'Sunset');
@@ -249,7 +251,7 @@ void main() {
       state.checkDate();
       expect(state.today, DateTime(2026, 10, 23));
       expect(state.lateNight, isTrue);
-      final journal = state.habits.firstWhere((h) => h.name == 'Journal');
+      final journal = state.sleepHabits.firstWhere((h) => h.name == 'Unwind');
       state.cycle(state.today, journal);
       expect(state.statusOf(DateTime(2026, 10, 23), journal), HabitStatus.done);
       expect(state.todos[TodoScope.today]!.single.carried, 0, reason: 'still Friday');
@@ -319,15 +321,49 @@ void main() {
     });
   });
 
+  group('sleep schedule', () {
+    test('an older database folds its sleep rituals in, keeping their history', () {
+      final path = '${Directory.systemTemp.createTempSync('productivity_sleep').path}/old.db';
+      Store.open(path).close();
+      // Back to how a database looked before the sleep schedule.
+      final db = sqlite3.open(path);
+      db.execute('DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits; PRAGMA user_version = 2;');
+      final ids = <String, int>{};
+      for (final (i, name) in [
+        'Get up at 8:30 am', 'Brush teeth', 'Wind down at 8:45', 'Journal', 'Meditate', //
+        'Screens, shower finished by 9:30 pm', 'Read', 'Bed by 10:30 pm',
+      ].indexed) {
+        db.execute('INSERT INTO habits DEFAULT VALUES');
+        ids[name] = db.lastInsertRowId;
+        db.execute('INSERT INTO month_habits VALUES (2026, 10, ?, ?, ?)', [ids[name], name, i]);
+      }
+      db.execute("INSERT INTO entries (day, habit_id, status) VALUES ('2026-10-01', ?, 1)", [ids['Get up at 8:30 am']]);
+      db.close();
+
+      final store = Store.open(path);
+      final state = AppState(store, clock: () => DateTime(2026, 10, 23));
+      expect(state.habits.map((h) => h.name), ['Brush teeth', 'Read']);
+      final sleep = state.sleepHabits;
+      expect(sleep.map((h) => h.name), ['Rise Early', 'Unwind', 'Screen Curfew', 'Sleep Early']);
+      expect(sleep.first.description, 'Awaken at 8:30 am');
+      expect(sleep.first.id, ids['Get up at 8:30 am']);
+      expect(sleep[1].id, isNot(ids['Wind down at 8:45']), reason: 'Unwind starts fresh');
+      expect(sleep[2].id, ids['Screens, shower finished by 9:30 pm']);
+      expect(sleep[3].id, ids['Bed by 10:30 pm']);
+      expect(state.statusOf(DateTime(2026, 10, 1), sleep.first), HabitStatus.done);
+      expect(state.habitsFor(2025, 3).map((h) => h.name), ['Brush teeth', 'Read'], reason: 'every month');
+    });
+  });
+
   group('per-month rituals', () {
     test('a new month copies the last one, and edits stay in their month', () {
       var now = DateTime(2026, 10, 31);
       final state = AppState(Store.memory(), clock: () => now);
 
       // Future months preview the latest list without saving it.
-      expect(state.habitsFor(2026, 12), hasLength(14));
+      expect(state.habitsFor(2026, 12), hasLength(8));
       state.addHabit(2026, 10, 'Stretch');
-      expect(state.habitsFor(2026, 12), hasLength(15));
+      expect(state.habitsFor(2026, 12), hasLength(9));
 
       now = DateTime(2026, 11, 1);
       state.checkDate();
@@ -335,15 +371,15 @@ void main() {
       expect(nov.map((h) => h.name), state.habitsFor(2026, 10).map((h) => h.name));
       expect(state.habits, same(nov));
 
-      state.renameHabit(2026, 11, nov.first, 'Get up at 7');
+      state.renameHabit(2026, 11, nov.first, 'Tidy room');
       state.removeHabit(2026, 11, nov.last);
       state.reorderHabit(2026, 11, 0, 2); // move first to third place
-      expect(nov.take(3).map((h) => h.name), ['Clean room', 'No phone until breakfast', 'Get up at 7']);
-      expect(nov, hasLength(14));
+      expect(nov.take(3).map((h) => h.name), ['No phone until breakfast', 'Morning walk', 'Tidy room']);
+      expect(nov, hasLength(8));
 
       final oct = state.store.monthHabits(2026, 10);
-      expect(oct.first.name, 'Get up at 8');
-      expect(oct, hasLength(15));
+      expect(oct.first.name, 'Clean room');
+      expect(oct, hasLength(9));
 
       // Same ritual id across months keeps streaks going.
       final getUp = oct.first;
@@ -359,13 +395,13 @@ void main() {
 
       // Browsing back a year shows October's rituals but saves nothing.
       final preview = state.habitsFor(2025, 10);
-      expect(preview, hasLength(14));
+      expect(preview, hasLength(8));
       expect(state.isPreviewMonth(2025, 10), isTrue);
       expect(state.store.monthHabits(2025, 10), isEmpty);
 
       // Ticking a ritual saves the month.
       state.cycle(DateTime(2025, 10, 5), preview.first);
-      expect(state.store.monthHabits(2025, 10), hasLength(14));
+      expect(state.store.monthHabits(2025, 10), hasLength(8));
       expect(state.isPreviewMonth(2025, 10), isFalse);
       expect(state.statusOf(DateTime(2025, 10, 5), state.habitsFor(2025, 10).first), HabitStatus.done);
 
@@ -378,7 +414,7 @@ void main() {
       state.renameHabit(2025, 8, aug.first, 'Get up at 9');
       expect(state.store.monthHabits(2025, 8).first.name, 'Get up at 9');
       expect(state.habitsFor(2025, 8).first.name, 'Get up at 9');
-      expect(sep.first.name, 'Get up at 8');
+      expect(sep.first.name, 'Clean room');
     });
 
     test('adding a ritual works in a database with no lists at all', () {
@@ -460,7 +496,7 @@ void main() {
 
       await expectLater(state.restore(copy), throwsA(anything));
       expect(state.statusOf(day, weights), HabitStatus.done);
-      expect(state.store.monthHabits(2026, 10), hasLength(14));
+      expect(state.store.monthHabits(2026, 10), hasLength(8));
       state.store.close();
     });
   });
@@ -524,6 +560,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Daily rituals'), findsOneWidget);
+    expect(find.text('Sleep schedule'), findsOneWidget);
+    expect(find.text('Screen Curfew'), findsOneWidget);
     expect(find.text('Dust room'), findsOneWidget);
 
     final weights = state.habits.firstWhere((h) => h.name == 'Weights');
@@ -534,7 +572,8 @@ void main() {
 
     await tester.tap(find.text('Oct').first); // a hidden copy reserves its bold width
     await tester.pumpAndSettle();
-    expect(find.text('31'), findsOneWidget);
+    expect(find.text('31'), findsNWidgets(2), reason: 'rituals and sleep schedule each have the days');
+    expect(find.text('SLEEP SCHEDULE  ·  4'), findsOneWidget);
     await _shoot(tester, 'month');
 
     await tester.tap(find.text('Edit rituals'));
@@ -566,7 +605,7 @@ void main() {
     final weights = tester.renderObject<RenderParagraph>(find.text('Weights'));
     expect(tablets.didExceedMaxLines, isFalse);
     expect(tablets.size.height, greaterThan(weights.size.height * 1.5));
-    expect(find.text('Rest day. Nothing you have to do.'), findsOneWidget);
+    expect(find.text('Rest day. Nothing you have to do.'), findsNWidgets(2), reason: 'the sleep schedule rests too');
     await _shoot(tester, 'today_narrow_weekend');
   });
 
@@ -643,11 +682,11 @@ void main() {
     await tester.pump();
     final card = tester.getRect(find.text('Edit rituals'));
     final first = find.text('1').first;
-    var lastX = tester.getRect(find.text('30')).left;
+    var lastX = tester.getRect(find.text('30').first).left;
     for (var i = 1; i <= 18; i++) {
       await tester.pump(const Duration(milliseconds: 25));
       expect(opacityOf(first), 1, reason: 'the grid never fades between months');
-      final x = tester.getRect(find.text('30')).left;
+      final x = tester.getRect(find.text('30').first).left;
       expect(x >= lastX && x - lastX < 6, isTrue, reason: 'columns spread smoothly: $lastX -> $x');
       lastX = x;
       if (i == 8) await _shoot(tester, 'oct_to_sep_8');

@@ -91,11 +91,61 @@ class Store {
         PRAGMA user_version = 2;
       ''');
     }
+    if (version < 3) {
+      _transaction(() {
+        _db.execute('''
+          -- The sleep schedule's habits, by SleepItem name. In every month,
+          -- so not in month_habits.
+          CREATE TABLE sleep_habits (
+            item TEXT PRIMARY KEY,
+            habit_id INTEGER NOT NULL REFERENCES habits(id)
+          )
+        ''');
+        // Rituals the sleep schedule replaces. These three keep their
+        // history and streaks; Unwind starts fresh.
+        const carried = {
+          SleepItem.riseEarly: 'Get up at%',
+          SleepItem.screenCurfew: 'Screens, shower%',
+          SleepItem.sleepEarly: 'Bed by%',
+        };
+        for (final item in SleepItem.values) {
+          final match = carried[item] == null
+              ? const <Row>[]
+              : _db.select(
+                  'SELECT habit_id FROM month_habits WHERE name LIKE ? ORDER BY year DESC, month DESC LIMIT 1',
+                  [carried[item]],
+                );
+          final int id;
+          if (match.isNotEmpty) {
+            id = match.first['habit_id'] as int;
+          } else {
+            _db.execute('INSERT INTO habits DEFAULT VALUES');
+            id = _db.lastInsertRowId;
+          }
+          _db.execute('INSERT INTO sleep_habits (item, habit_id) VALUES (?, ?)', [item.name, id]);
+          _db.execute('DELETE FROM month_habits WHERE habit_id = ?', [id]);
+        }
+        // Unwind covers these; their marks stay in entries, unseen.
+        _db.execute("DELETE FROM month_habits WHERE name LIKE 'Wind down%' OR name IN ('Journal', 'Meditate')");
+        _db.execute('PRAGMA user_version = 3');
+      });
+    }
   }
 
   // Habits
 
-  bool get isEmpty => _db.select('SELECT 1 FROM habits LIMIT 1').isEmpty;
+  /// No ritual has ever been added (the sleep schedule doesn't count).
+  bool get isEmpty =>
+      _db.select('SELECT 1 FROM habits WHERE id NOT IN (SELECT habit_id FROM sleep_habits) LIMIT 1').isEmpty;
+
+  List<Habit> sleepHabits() {
+    final ids = {
+      for (final r in _db.select('SELECT item, habit_id FROM sleep_habits')) r['item'] as String: r['habit_id'] as int,
+    };
+    return [
+      for (final item in SleepItem.values) Habit(ids[item.name]!, item.label, description: item.description),
+    ];
+  }
 
   List<Habit> monthHabits(int year, int month) => [
         for (final r in _db.select(

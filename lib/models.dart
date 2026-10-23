@@ -9,10 +9,26 @@ enum HabitStatus {
 }
 
 class Habit {
-  Habit(this.id, this.name);
+  Habit(this.id, this.name, {this.description});
 
   final int id;
   String name;
+
+  /// Shown on hover in place of the name; only the sleep schedule has one.
+  final String? description;
+}
+
+/// The sleep schedule: the same four in every month, below the rituals.
+/// Fixed here rather than edited in the app.
+enum SleepItem {
+  riseEarly('Rise Early', 'Awaken at 8:30 am'),
+  unwind('Unwind', 'Complete daily tasks, journal, shower, brush teeth, and meditate at 9 pm'),
+  screenCurfew('Screen Curfew', 'Turn off all screens at 10 pm'),
+  sleepEarly('Sleep Early', 'Sleep at 11 pm');
+
+  const SleepItem(this.label, this.description);
+  final String label;
+  final String description;
 }
 
 enum TodoScope {
