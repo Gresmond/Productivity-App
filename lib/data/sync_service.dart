@@ -36,6 +36,8 @@ class SyncService extends ChangeNotifier {
     } on FormatException {
       // A damaged file: set up again.
     }
+    // From when sync went through rclone.
+    config.remove('remote');
     if (config['machine'] is! String) {
       final random = Random.secure();
       config['machine'] = List.generate(8, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();

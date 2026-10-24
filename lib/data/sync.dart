@@ -29,7 +29,7 @@ class Incoming {
 
 /// Keeps rituals, ticks, to-dos and the journal the same on several
 /// computers, through a folder that each of them copies to and from a
-/// shared place (Google Drive, by rclone).
+/// shared place (Eclipse's hidden folder in Google Drive).
 ///
 /// Every field of every row is a register with a version per computer.
 /// Each computer writes only its own registers, to its own folder, one
