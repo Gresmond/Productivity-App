@@ -14,6 +14,9 @@ abstract final class Fonts {
 
   /// Labels, day numerals, stats. Same as [body] for now.
   static const ui = body;
+
+  /// The sleep schedule's times.
+  static const time = 'Haffer SemiMono';
 }
 
 /// Every colour the app draws with. Each theme is one instance of this.

@@ -333,24 +333,20 @@ class AppState extends ChangeNotifier {
   final Map<(int, int), List<Habit>> _monthSleep = {};
 
   /// The sleep schedule: the same four items in every month, each month
-  /// with its own tooltips.
+  /// with its own times.
   List<Habit> sleepHabitsFor(int year, int month) => _monthSleep[(year, month)] ??= store.sleepHabits(year, month);
 
-  /// This month's tooltip for a sleep item; blank shows just its name. A
-  /// new month starts with the month before's, and an edit changes only
-  /// its own month: the month after keeps what it had.
-  void setSleepNote(int year, int month, Habit h, String note) {
+  /// This month's time for a sleep item; null clears it. A new month
+  /// starts with the month before's, and a change stays in its own month:
+  /// the month after keeps what it had.
+  void setSleepTime(int year, int month, Habit h, int? minutes) {
     final item = SleepItem.values[sleepHabitsFor(year, month).indexWhere((x) => x.id == h.id)];
+    String key(int? m) => m == null ? '' : clockKey(m);
     final next = DateTime(year, month + 1);
     if (!isFutureMonth(next.year, next.month) && store.sleepNote(next.year, next.month, item, own: true) == null) {
-      store.setSleepNote(
-        next.year,
-        next.month,
-        item,
-        sleepHabitsFor(next.year, next.month)[item.index].description ?? '',
-      );
+      store.setSleepNote(next.year, next.month, item, key(sleepHabitsFor(next.year, next.month)[item.index].minutes));
     }
-    store.setSleepNote(year, month, item, note.trim());
+    store.setSleepNote(year, month, item, key(minutes));
     _monthSleep.clear();
     notifyListeners();
   }

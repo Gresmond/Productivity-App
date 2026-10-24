@@ -189,23 +189,25 @@ class Store {
   bool get isEmpty =>
       _db.select('SELECT 1 FROM habits WHERE id NOT IN (SELECT habit_id FROM sleep_habits) LIMIT 1').isEmpty;
 
-  /// The sleep schedule as it reads in a month: each item's tooltip is the
-  /// text from that month, or the nearest month before with its own, or
-  /// the original wording.
+  /// The sleep schedule as it reads in a month: each item's time is the
+  /// one set for that month, or the nearest month before with its own, or
+  /// the original time.
   List<Habit> sleepHabits(int year, int month) {
     final ids = {
       for (final r in _db.select('SELECT item, habit_id FROM sleep_habits')) r['item'] as String: r['habit_id'] as int,
     };
     return [
       for (final item in SleepItem.values)
-        Habit(ids[item.name]!, item.label, description: _nonEmpty(sleepNote(year, month, item) ?? item.description)),
+        Habit(ids[item.name]!, item.label, minutes: switch (sleepNote(year, month, item)) {
+          null => item.minutes,
+          final note => parseClock(note),
+        }),
     ];
   }
 
-  static String? _nonEmpty(String s) => s.isEmpty ? null : s;
-
-  /// Your text for [item] in force in this month; null if never written.
-  /// With [own], only text written for this very month.
+  /// The time saved for [item] in force in this month ("21:00", empty for
+  /// none, or a note from before times were picked); null if never set.
+  /// With [own], only what was set for this very month.
   String? sleepNote(int year, int month, SleepItem item, {bool own = false}) {
     final r = _db.select(
       'SELECT note FROM sleep_notes WHERE item = ? AND year * 12 + month ${own ? '=' : '<='} ? '

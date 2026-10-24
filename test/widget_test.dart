@@ -583,7 +583,7 @@ void main() {
       expect(state.habits.map((h) => h.name), ['Brush teeth', 'Read']);
       final sleep = state.sleepHabits;
       expect(sleep.map((h) => h.name), ['Rise Early', 'Unwind', 'Screen Curfew', 'Sleep Early']);
-      expect(sleep.first.description, 'Awaken at 8:30 am');
+      expect(sleep.first.minutes, 8 * 60 + 30);
       expect(sleep.first.id, ids['Get up at 8:30 am']);
       expect(sleep[1].id, isNot(ids['Wind down at 8:45']), reason: 'Unwind starts fresh');
       expect(sleep[2].id, ids['Screens, shower finished by 9:30 pm']);
@@ -627,28 +627,43 @@ void main() {
     });
   });
 
-  test('sleep notes belong to their month, and a new month starts with the last', () {
+  test('sleep times belong to their month, and a new month starts with the last', () {
     final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 24));
-    String note(int month) => state.sleepHabitsFor(2026, month).first.description ?? '(name)';
-    expect(note(10), 'Awaken at 8:30 am');
+    int? time(int month) => state.sleepHabitsFor(2026, month).first.minutes;
+    expect(time(10), 8 * 60 + 30);
 
-    state.setSleepNote(2026, 10, state.sleepHabitsFor(2026, 10).first, 'Up by 8 am');
-    expect(note(10), 'Up by 8 am');
-    expect(note(9), 'Awaken at 8:30 am', reason: 'earlier months keep theirs');
-    expect(note(11), 'Up by 8 am', reason: 'a new month copies the last');
+    state.setSleepTime(2026, 10, state.sleepHabitsFor(2026, 10).first, 8 * 60);
+    expect(time(10), 8 * 60);
+    expect(time(9), 8 * 60 + 30, reason: 'earlier months keep theirs');
+    expect(time(11), 8 * 60, reason: 'a new month copies the last');
 
-    state.setSleepNote(2026, 9, state.sleepHabitsFor(2026, 9).first, '');
-    expect(note(9), '(name)', reason: 'blank shows just the name');
-    expect(note(10), 'Up by 8 am', reason: 'an edit stays in its month');
+    state.setSleepTime(2026, 9, state.sleepHabitsFor(2026, 9).first, null);
+    expect(time(9), isNull, reason: 'cleared shows just the name');
+    expect(time(10), 8 * 60, reason: 'a change stays in its month');
 
-    state.setSleepNote(2026, 8, state.sleepHabitsFor(2026, 8).first, 'Summer hours');
-    expect(note(9), '(name)');
-    expect(note(10), 'Up by 8 am');
-    expect(
-      state.sleepHabitsFor(2026, 10)[1].description,
-      startsWith('Complete daily tasks'),
-      reason: 'others untouched',
-    );
+    state.setSleepTime(2026, 8, state.sleepHabitsFor(2026, 8).first, 7 * 60 + 45);
+    expect(time(9), isNull);
+    expect(time(10), 8 * 60);
+    expect(state.sleepHabitsFor(2026, 10)[1].minutes, 21 * 60, reason: 'others untouched');
+  });
+
+  test('times are read from notes written before times were picked', () {
+    expect(parseClock('Awaken at 8:30 am'), 8 * 60 + 30);
+    expect(parseClock('Complete daily tasks, journal, shower, brush teeth, and meditate at 9 pm'), 21 * 60);
+    expect(parseClock('Lights out by 11'), isNull);
+    expect(parseClock('12 am'), 0);
+    expect(parseClock('12:15 PM'), 12 * 60 + 15);
+    expect(parseClock('22:00'), 22 * 60);
+    expect(parseClock(''), isNull);
+    expect(clockLabel(8 * 60 + 30), '8:30 am');
+    expect(clockLabel(21 * 60), '9 pm');
+    expect(clockLabel(0), '12 am');
+    expect(clockLabel(12 * 60 + 5), '12:05 pm');
+
+    final store = Store.memory();
+    final state = AppState(store, clock: () => DateTime(2026, 10, 24));
+    store.setSleepNote(2026, 10, SleepItem.unwind, 'Wind down at 9:15 pm');
+    expect(state.sleepHabitsFor(2026, 10)[1].minutes, 21 * 60 + 15);
   });
 
   group('ritual notes', () {
@@ -899,8 +914,8 @@ void main() {
     await tester.pumpAndSettle();
     await _shoot(tester, 'today');
 
-    // The bottom sleep row's tooltip shows from anywhere on its height, not
-    // just over the line of text.
+    // Sleep items show their times beside their names, and no tooltip.
+    expect(find.text('11 pm'), findsOneWidget);
     final name = tester.getRect(find.text('Sleep Early'));
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     addTearDown(mouse.removePointer);
@@ -908,7 +923,7 @@ void main() {
     await mouse.moveTo(Offset(name.center.dx, name.top - 8));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    expect(find.text('Sleep at 11 pm'), findsOneWidget);
+    expect(find.text('Sleep Early'), findsOneWidget, reason: 'no tooltip repeats the name');
     await mouse.moveTo(Offset.zero);
     await tester.pumpAndSettle();
 
@@ -938,16 +953,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stretch'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Edit notes'));
-    await tester.tap(find.text('Edit notes'));
+    expect(find.text('11 pm'), findsOneWidget, reason: 'times show beside the sleep items');
+    await tester.ensureVisible(find.text('Edit times'));
+    await tester.tap(find.text('Edit times'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Sleep at 11 pm'), 'Lights out by 11');
-    expect(state.sleepHabits.last.description, 'Lights out by 11');
+    await tester.tap(find.text('11 pm'));
+    await tester.pumpAndSettle();
+    await _shoot(tester, 'sleep_wheel');
+    // Clicking a minute on the wheel turns it there.
+    await tester.tap(find.text('05').hitTestable().first);
+    await tester.pumpAndSettle();
+    expect(state.sleepHabits.last.minutes, 23 * 60 + 5);
+    // Dragging it up a row moves on five minutes.
+    await tester.drag(find.text('05').hitTestable().first, const Offset(0, -38.0 - kDragSlopDefault));
+    await tester.pumpAndSettle();
+    expect(state.sleepHabits.last.minutes, 23 * 60 + 10);
+    await tester.tap(find.text('Clear time'));
+    await tester.pumpAndSettle();
+    expect(state.sleepHabits.last.minutes, isNull);
+    expect(find.text('Select time'), findsOneWidget);
     await tester.ensureVisible(find.text('Done'));
     await _shoot(tester, 'sleep_edit');
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
-    expect(find.text('Edit notes'), findsOneWidget);
+    expect(find.text('Edit times'), findsOneWidget);
   });
 
   testWidgets('the month view fits rituals and sleep schedule without scrolling', (tester) async {

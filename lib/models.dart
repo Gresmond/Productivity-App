@@ -9,27 +9,32 @@ enum HabitStatus {
 }
 
 class Habit {
-  Habit(this.id, this.name, {this.description});
+  Habit(this.id, this.name, {this.description, this.minutes});
 
   final int id;
   String name;
 
-  /// Shown on hover in place of the name: the note you wrote for a ritual,
-  /// or the sleep schedule's fixed text.
+  /// Shown on hover in place of the name: the note you wrote for a ritual.
   String? description;
+
+  /// A sleep item's time this month, in minutes after midnight; null when
+  /// none is set. Rituals have none.
+  int? minutes;
 }
 
 /// The sleep schedule: the same four in every month, below the rituals.
-/// Fixed here rather than edited in the app.
+/// The items are fixed here; their times are set month by month.
 enum SleepItem {
-  riseEarly('Rise Early', 'Awaken at 8:30 am'),
-  unwind('Unwind', 'Complete daily tasks, journal, shower, brush teeth, and meditate at 9 pm'),
-  screenCurfew('Screen Curfew', 'Turn off all screens at 10 pm'),
-  sleepEarly('Sleep Early', 'Sleep at 11 pm');
+  riseEarly('Rise Early', 8 * 60 + 30),
+  unwind('Unwind', 21 * 60),
+  screenCurfew('Screen Curfew', 22 * 60),
+  sleepEarly('Sleep Early', 23 * 60);
 
-  const SleepItem(this.label, this.description);
+  const SleepItem(this.label, this.minutes);
   final String label;
-  final String description;
+
+  /// The time before any month sets its own, in minutes after midnight.
+  final int minutes;
 }
 
 enum TodoScope {
@@ -89,6 +94,29 @@ DateTime nextDayStart(DateTime now, int startHour) {
 
 /// 'Midnight', '4am'.
 String hourLabel(int hour) => hour == 0 ? 'Midnight' : '${hour}am';
+
+/// A time of day as the sleep schedule shows it: "8:30 am", "9 pm".
+String clockLabel(int minutes) {
+  final (h, m) = (minutes ~/ 60, minutes % 60);
+  final hour = h % 12 == 0 ? 12 : h % 12;
+  return '$hour${m == 0 ? '' : ':${m.toString().padLeft(2, '0')}'} ${h < 12 ? 'am' : 'pm'}';
+}
+
+/// A sleep item's saved time: "21:00", or a time inside a note written
+/// before times were picked ("Awaken at 8:30 am"). Null when there's none.
+int? parseClock(String text) {
+  if (RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(text) case final m?) {
+    return int.parse(m[1]!) * 60 + int.parse(m[2]!);
+  }
+  final m = RegExp(r'(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\b', caseSensitive: false).firstMatch(text);
+  if (m == null) return null;
+  final hour = int.parse(m[1]!) % 12 + (m[3]!.toLowerCase() == 'p' ? 12 : 0);
+  return hour * 60 + int.parse(m[2] ?? '0');
+}
+
+/// How a sleep item's time is saved: "08:30".
+String clockKey(int minutes) =>
+    '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
 String dateKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

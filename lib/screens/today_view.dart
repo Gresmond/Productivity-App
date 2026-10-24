@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/fade_through.dart';
 import '../widgets/hover_fill.dart';
 import '../widgets/progress_ring.dart';
+import '../widgets/sleep_time.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
 import '../widgets/todo_panel.dart';
@@ -52,15 +53,24 @@ class TodayView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: TourTarget(spot: TourSpot.laterTodos, child: TodoPanel(scope: TodoScope.week, day: past ? day : null)),
+                    child: TourTarget(
+                      spot: TourSpot.laterTodos,
+                      child: TodoPanel(scope: TodoScope.week, day: past ? day : null),
+                    ),
                   ),
                   const SizedBox(height: _gap),
                   Expanded(
-                    child: TourTarget(spot: TourSpot.laterTodos, child: TodoPanel(scope: TodoScope.month, day: past ? day : null)),
+                    child: TourTarget(
+                      spot: TourSpot.laterTodos,
+                      child: TodoPanel(scope: TodoScope.month, day: past ? day : null),
+                    ),
                   ),
                   const SizedBox(height: _gap),
                   Expanded(
-                    child: TourTarget(spot: TourSpot.journal, child: _JournalCard(key: ValueKey((dateKey(day), state.restores)))),
+                    child: TourTarget(
+                      spot: TourSpot.journal,
+                      child: _JournalCard(key: ValueKey((dateKey(day), state.restores))),
+                    ),
                   ),
                 ],
               ),
@@ -71,18 +81,11 @@ class TodayView extends StatelessWidget {
         if (needsScroll) {
           content = SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: minContentWidth,
-              height: constraints.maxHeight,
-              child: content,
-            ),
+            child: SizedBox(width: minContentWidth, height: constraints.maxHeight, child: content),
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
-          child: content,
-        );
+        return Padding(padding: const EdgeInsets.fromLTRB(32, 0, 32, 28), child: content);
       },
     );
   }
@@ -118,7 +121,12 @@ class _HabitColumn extends StatelessWidget {
               height: sleepHeight,
               child: TourTarget(
                 spot: TourSpot.sleep,
-                child: _HabitsCard(title: 'Sleep schedule', habits: sleep, allDone: 'Schedule kept. Sleep well.'),
+                child: _HabitsCard(
+                  title: 'Sleep schedule',
+                  habits: sleep,
+                  allDone: 'Schedule kept. Sleep well.',
+                  times: true,
+                ),
               ),
             ),
           ],
@@ -129,10 +137,13 @@ class _HabitColumn extends StatelessWidget {
 }
 
 class _HabitsCard extends StatelessWidget {
-  const _HabitsCard({required this.title, required this.habits, required this.allDone});
+  const _HabitsCard({required this.title, required this.habits, required this.allDone, this.times = false});
 
   final String title;
   final List<Habit> habits;
+
+  /// The sleep schedule: each item's time beside its name, and no tooltip.
+  final bool times;
 
   /// The line under the title once every one is done.
   final String allDone;
@@ -252,11 +263,17 @@ class _HabitsCard extends StatelessWidget {
                 return IgnorePointer(
                   ignoring: past,
                   child: ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemExtentBuilder: (i, _) => i < total ? rows.heights[i] : null,
-                  itemCount: total,
-                  itemBuilder: (context, i) =>
-                      _HabitRow(habit: habits[i], day: day, cellSize: rows.cell, weekTrail: rows.trail, divider: i > 0),
+                    padding: EdgeInsets.zero,
+                    itemExtentBuilder: (i, _) => i < total ? rows.heights[i] : null,
+                    itemCount: total,
+                    itemBuilder: (context, i) => _HabitRow(
+                      habit: habits[i],
+                      day: day,
+                      cellSize: rows.cell,
+                      weekTrail: rows.trail,
+                      divider: i > 0,
+                      names: times ? [for (final h in habits) h.name] : null,
+                    ),
                   ),
                 );
               },
@@ -326,6 +343,7 @@ class _HabitRow extends StatelessWidget {
     required this.cellSize,
     required this.weekTrail,
     required this.divider,
+    this.names,
   });
 
   static const nameStyle = TextStyle(fontFamily: Fonts.body, fontSize: 13.5, fontWeight: FontWeight.w500);
@@ -349,6 +367,9 @@ class _HabitRow extends StatelessWidget {
   final bool weekTrail;
   final bool divider;
 
+  /// The sleep schedule's names, when this row shows a time (see [SleepName]).
+  final List<String>? names;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -365,26 +386,29 @@ class _HabitRow extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Tooltip(
-                message: habit.description ?? habit.name,
-                waitDuration: const Duration(milliseconds: 300),
-                // The whole height of the row, not just the line of text,
-                // so the tooltip is easy to catch.
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    habit.name,
-                    maxLines: nameLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: nameStyle.copyWith(color: p.ink),
-                  ),
-                ),
-              ),
+              child: names != null
+                  ? SleepName(
+                      habit: habit,
+                      names: names!,
+                      style: nameStyle.copyWith(color: p.ink),
+                    )
+                  : Tooltip(
+                      message: habit.description ?? habit.name,
+                      waitDuration: const Duration(milliseconds: 300),
+                      // The whole height of the row, not just the line of text,
+                      // so the tooltip is easy to catch.
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          habit.name,
+                          maxLines: nameLines,
+                          overflow: TextOverflow.ellipsis,
+                          style: nameStyle.copyWith(color: p.ink),
+                        ),
+                      ),
+                    ),
             ),
-            if (weekTrail) ...[
-              const SizedBox(width: 10),
-              _WeekTrail(habit: habit, day: day),
-            ],
+            if (weekTrail) ...[const SizedBox(width: 10), _WeekTrail(habit: habit, day: day)],
             const SizedBox(width: 8),
             Tooltip(
               message: past
@@ -429,10 +453,7 @@ class _HabitRow extends StatelessWidget {
                       : Text(
                           '–',
                           key: const ValueKey(0),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: p.inkMuted.withValues(alpha: 0.4),
-                          ),
+                          style: TextStyle(fontSize: 13, color: p.inkMuted.withValues(alpha: 0.4)),
                         ),
                 ),
               ),
@@ -457,11 +478,7 @@ class _WeekTrail extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    return Row(
-      children: [
-        for (var i = 7; i >= 1; i--) _mark(p, state, DateTime(day.year, day.month, day.day - i)),
-      ],
-    );
+    return Row(children: [for (var i = 7; i >= 1; i--) _mark(p, state, DateTime(day.year, day.month, day.day - i))]);
   }
 
   // A rest day's blank mark fades rather than snapping; the colour itself
@@ -559,12 +576,7 @@ class _JournalCardState extends State<_JournalCard> {
               expands: true,
               maxLines: null,
               textAlignVertical: TextAlignVertical.top,
-              style: TextStyle(
-                fontFamily: Fonts.body,
-                fontSize: 14,
-                height: 1.35,
-                color: p.ink,
-              ),
+              style: TextStyle(fontFamily: Fonts.body, fontSize: 14, height: 1.35, color: p.ink),
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: state.viewDay != null ? 'Nothing written this day.' : null,

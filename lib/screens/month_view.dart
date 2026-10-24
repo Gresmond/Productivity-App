@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/appear.dart';
+import '../widgets/fade_menu.dart';
 import '../widgets/fade_through.dart';
+import '../widgets/sleep_time.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
 
@@ -100,7 +103,7 @@ class _MonthViewState extends State<MonthView> {
                       child: _editButton(
                         future,
                         _editingSleep,
-                        'Edit notes',
+                        'Edit times',
                         () => setState(() => _editingSleep = !_editingSleep),
                       ),
                     ),
@@ -125,6 +128,7 @@ class _MonthViewState extends State<MonthView> {
                               nameWidth: _nameWidth,
                               maxCell: maxCell,
                               doneLabel: 'of the logged schedule kept',
+                              times: true,
                             ),
                     ),
                   ),
@@ -208,6 +212,7 @@ class _Grid extends StatefulWidget {
     required this.nameWidth,
     required this.maxCell,
     this.doneLabel = 'of logged rituals done',
+    this.times = false,
   });
 
   final int year;
@@ -218,6 +223,9 @@ class _Grid extends StatefulWidget {
   /// The largest square that keeps the page from scrolling.
   final double maxCell;
   final String doneLabel;
+
+  /// The sleep schedule: each item's time beside its name, and no tooltip.
+  final bool times;
 
   @override
   State<_Grid> createState() => _GridState();
@@ -344,6 +352,7 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
                 animate: _known.isNotEmpty && !_known.contains(h.id),
                 child: _MonthHabitRow(
                   habit: h,
+                  names: widget.times ? [for (final x in habits) x.name] : null,
                   nameWidth: nameWidth,
                   cellSize: cell,
                   layout: layout,
@@ -640,9 +649,13 @@ class _MonthHabitRow extends StatefulWidget {
     required this.clickableDays,
     required this.nameWidth,
     required this.cellSize,
+    this.names,
   });
 
   final Habit habit;
+
+  /// The sleep schedule's names, when this row shows a time (see [SleepName]).
+  final List<String>? names;
 
   /// This ritual's square in each column of [layout].
   final List<Widget> cells;
@@ -673,6 +686,13 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
     final p = context.palette;
     const pad = _HighlightPainter.pad;
     final height = widget.cellSize + 5;
+    final nameStyle = TextStyle(
+      fontFamily: Fonts.body,
+      fontSize: 13.5,
+      height: 1.15,
+      fontWeight: FontWeight.w500,
+      color: p.ink,
+    );
 
     return Row(
       children: [
@@ -683,22 +703,18 @@ class _MonthHabitRowState extends State<_MonthHabitRow> {
             // A long name wraps onto a second line, set a little tighter so
             // the row barely grows, unless squares are too small for two
             // lines: then it's cut short, whole on hover.
-            child: Tooltip(
-              message: widget.habit.description ?? widget.habit.name,
-              waitDuration: const Duration(milliseconds: 600),
-              child: Text(
-                widget.habit.name,
-                maxLines: height >= 2 * 13.5 * 1.15 + 2 ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: Fonts.body,
-                  fontSize: 13.5,
-                  height: 1.15,
-                  fontWeight: FontWeight.w500,
-                  color: p.ink,
-                ),
-              ),
-            ),
+            child: widget.names != null
+                ? SleepName(habit: widget.habit, names: widget.names!, style: nameStyle)
+                : Tooltip(
+                    message: widget.habit.description ?? widget.habit.name,
+                    waitDuration: const Duration(milliseconds: 600),
+                    child: Text(
+                      widget.habit.name,
+                      maxLines: height >= 2 * 13.5 * 1.15 + 2 ? 2 : 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: nameStyle,
+                    ),
+                  ),
           ),
         ),
         // Only the squares light up on hover, not the ritual's name.
@@ -835,7 +851,7 @@ class _RitualEditorState extends State<_RitualEditor> {
   }
 }
 
-/// The sleep schedule's tooltips for one month. The four items themselves
+/// The sleep schedule's times for one month. The four items themselves
 /// stay put.
 class _SleepEditor extends StatelessWidget {
   const _SleepEditor({required this.year, required this.month});
@@ -856,7 +872,7 @@ class _SleepEditor extends StatelessWidget {
             _SleepNoteRow(key: ValueKey(h.id), year: year, month: month, habit: h),
           const SizedBox(height: 18),
           Text(
-            'Notes show when you hover over an item. Changes apply to ${monthNames[month - 1]} only; '
+            'Times show beside each item. Changes apply to ${monthNames[month - 1]} only; '
             'each new month starts with the one before\'s.',
             style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
           ),
@@ -866,7 +882,7 @@ class _SleepEditor extends StatelessWidget {
   }
 }
 
-class _SleepNoteRow extends StatefulWidget {
+class _SleepNoteRow extends StatelessWidget {
   const _SleepNoteRow({super.key, required this.year, required this.month, required this.habit});
 
   final int year;
@@ -874,49 +890,271 @@ class _SleepNoteRow extends StatefulWidget {
   final Habit habit;
 
   @override
-  State<_SleepNoteRow> createState() => _SleepNoteRowState();
-}
-
-class _SleepNoteRowState extends State<_SleepNoteRow> {
-  late final _note = TextEditingController(text: widget.habit.description);
-
-  @override
-  void dispose() {
-    _note.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final state = AppScope.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2.5),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+      padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
       decoration: BoxDecoration(
         color: p.empty.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: p.tileBorder.withValues(alpha: 0.5)),
       ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              habit.name,
+              style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
+            ),
+          ),
+          _TimeButton(year: year, month: month, habit: habit),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows a sleep item's time, or "Select time", and opens a wheel to pick it.
+class _TimeButton extends StatefulWidget {
+  const _TimeButton({required this.year, required this.month, required this.habit});
+
+  final int year;
+  final int month;
+  final Habit habit;
+
+  @override
+  State<_TimeButton> createState() => _TimeButtonState();
+}
+
+class _TimeButtonState extends State<_TimeButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final minutes = widget.habit.minutes;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: () => showFadeMenu(
+          context,
+          width: 248,
+          above: true,
+          builder: (_) => _TimeWheel(year: widget.year, month: widget.month, habitId: widget.habit.id),
+        ),
+        child: AnimatedContainer(
+          duration: Motion.hover,
+          curve: Motion.hoverCurve,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: _hover ? p.empty : p.tile.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: p.tileBorder.withValues(alpha: 0.8)),
+          ),
+          child: FadeThrough(
+            duration: Motion.click,
+            child: Text(
+              minutes == null ? 'Select time' : clockLabel(minutes),
+              key: ValueKey(minutes),
+              style: minutes == null
+                  ? TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted)
+                  : SleepName.timeStyle(p).copyWith(fontSize: 13, color: p.ink),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Three wheels, hour, minute (in fives) and am/pm, that set a sleep item's
+/// time as they turn. The hour and minute wheels go round and round.
+class _TimeWheel extends StatefulWidget {
+  const _TimeWheel({required this.year, required this.month, required this.habitId});
+
+  final int year;
+  final int month;
+  final int habitId;
+
+  @override
+  State<_TimeWheel> createState() => _TimeWheelState();
+}
+
+class _TimeWheelState extends State<_TimeWheel> {
+  static const _row = 38.0;
+  static const _rows = 5;
+
+  late final AppState _state = AppScope.of(context);
+  late final Habit _habit = _find();
+  late final int _start = ((_habit.minutes ?? SleepItem.values[_index].minutes) / 5).round() * 5 % (24 * 60);
+  late int _hour = _start ~/ 60 % 12, _minute = _start % 60 ~/ 5;
+  late bool _pm = _start >= 12 * 60;
+
+  // Started a few turns in, so the looping wheels can go either way.
+  late final _hours = FixedExtentScrollController(initialItem: 12 * 50 + _hour);
+  late final _minutes = FixedExtentScrollController(initialItem: 12 * 50 + _minute);
+  late final _halves = FixedExtentScrollController(initialItem: _pm ? 1 : 0);
+
+  int get _index => _state.sleepHabitsFor(widget.year, widget.month).indexWhere((h) => h.id == widget.habitId);
+  Habit _find() => _state.sleepHabitsFor(widget.year, widget.month)[_index];
+
+  @override
+  void initState() {
+    super.initState();
+    // Opening the wheel on an item with no time sets the one it shows.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_habit.minutes == null) _save();
+    });
+  }
+
+  @override
+  void dispose() {
+    _hours.dispose();
+    _minutes.dispose();
+    _halves.dispose();
+    super.dispose();
+  }
+
+  void _save() => _state.setSleepTime(widget.year, widget.month, _find(), (_hour + (_pm ? 12 : 0)) * 60 + _minute * 5);
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final style = SleepName.timeStyle(p).copyWith(fontSize: 19, fontWeight: FontWeight.w600, color: p.ink);
+
+    Widget wheel({
+      required FixedExtentScrollController controller,
+      required int count,
+      required bool loop,
+      required String Function(int) label,
+      required int selected,
+      required ValueChanged<int> onChanged,
+      double width = 56,
+    }) {
+      Widget item(int i) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => controller.animateToItem(
+          // The nearest way round to it.
+          loop ? controller.selectedItem + (i - controller.selectedItem % count + count ~/ 2) % count - count ~/ 2 : i,
+          duration: Motion.click,
+          curve: Motion.clickCurve,
+        ),
+        child: Center(
+          child: AnimatedDefaultTextStyle(
+            duration: Motion.hover,
+            curve: Motion.hoverCurve,
+            style: style.copyWith(color: i == selected ? p.ink : p.inkMuted.withValues(alpha: 0.75)),
+            child: Text(label(i)),
+          ),
+        ),
+      );
+      return SizedBox(
+        width: width,
+        child: ListWheelScrollView.useDelegate(
+          controller: controller,
+          itemExtent: _row,
+          diameterRatio: 1.6,
+          perspective: 0.004,
+          physics: const FixedExtentScrollPhysics(),
+          onSelectedItemChanged: (i) {
+            onChanged(i % count);
+            _save();
+          },
+          childDelegate: loop
+              ? ListWheelChildLoopingListDelegate(children: [for (var i = 0; i < count; i++) item(i)])
+              : ListWheelChildListDelegate(children: [for (var i = 0; i < count; i++) item(i)]),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            widget.habit.name,
-            style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
+            _habit.name,
+            style: TextStyle(fontFamily: Fonts.ui, fontSize: 13, fontWeight: FontWeight.w600, color: p.inkMuted),
           ),
-          TextField(
-            controller: _note,
-            maxLines: null,
-            style: TextStyle(fontFamily: Fonts.body, fontSize: 12.5, color: p.inkMuted),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 6),
-              hintText: 'Add a note',
-              hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.5)),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: _row * _rows,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // The band the chosen time sits in.
+                Container(
+                  height: _row,
+                  decoration: BoxDecoration(
+                    color: p.empty.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                // Rows fade out towards the wheel's top and bottom edges.
+                ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (rect) => const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+                    stops: [0, 0.32, 0.68, 1],
+                  ).createShader(rect),
+                  // Dragged with the mouse as well as scrolled.
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context)
+                        .copyWith(scrollbars: false, dragDevices: {...PointerDeviceKind.values}),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        wheel(
+                          controller: _hours,
+                          count: 12,
+                          loop: true,
+                          label: (i) => '${i == 0 ? 12 : i}',
+                          selected: _hour,
+                          onChanged: (i) => setState(() => _hour = i),
+                        ),
+                        Text(':', style: style),
+                        wheel(
+                          controller: _minutes,
+                          count: 12,
+                          loop: true,
+                          label: (i) => (i * 5).toString().padLeft(2, '0'),
+                          selected: _minute,
+                          onChanged: (i) => setState(() => _minute = i),
+                        ),
+                        const SizedBox(width: 6),
+                        wheel(
+                          controller: _halves,
+                          count: 2,
+                          loop: false,
+                          label: (i) => i == 0 ? 'am' : 'pm',
+                          selected: _pm ? 1 : 0,
+                          onChanged: (i) => setState(() => _pm = i == 1),
+                          width: 52,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            onChanged: (v) => state.setSleepNote(widget.year, widget.month, widget.habit, v),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                _state.setSleepTime(widget.year, widget.month, _find(), null);
+                Navigator.of(context).pop();
+              },
+              style: TextButton.styleFrom(foregroundColor: p.inkMuted, visualDensity: VisualDensity.compact),
+              child: Text('Clear time', style: TextStyle(fontFamily: Fonts.ui, fontSize: 12.5)),
+            ),
           ),
         ],
       ),
