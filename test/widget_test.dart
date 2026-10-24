@@ -283,6 +283,15 @@ void main() {
     });
   });
 
+  test('versions compare by number, across months and years', () {
+    expect(isNewer('1.10.2', '1.10.1'), isTrue);
+    expect(isNewer('1.11.1', '1.10.12'), isTrue);
+    expect(isNewer('2.1.1', '1.12.9'), isTrue);
+    expect(isNewer('1.10.1', '1.10.1'), isFalse);
+    expect(isNewer('1.9.5', '1.10.1'), isFalse);
+    expect(pubspecVersion('name: eclipse\nversion: 1.10.1+2\n'), '1.10.1');
+  });
+
   group('updates', () {
     late Directory dir;
     setUp(() => dir = Directory.systemTemp.createTempSync('productivity_updates'));
@@ -307,22 +316,24 @@ void main() {
 
       final app = Directory('${dir.path}/installed')..createSync();
       expect(
-        Updater.forExecutable('${app.path}/eclipse'),
+        GitUpdater.forExecutable('${app.path}/eclipse'),
         isNull,
         reason: 'no build-info: not installed by the script',
       );
       File('${app.path}/build-info').writeAsStringSync('repo=${dir.path}\ncommit=$built\n');
-      final updater = Updater.forExecutable('${app.path}/eclipse')!;
+      final updater = GitUpdater.forExecutable('${app.path}/eclipse')!;
 
       await updater.check();
       expect(updater.status, UpdateStatus.none, reason: 'up to date');
 
       git(['commit', '-q', '--allow-empty', '-m', 'Second']);
-      git(['commit', '-q', '--allow-empty', '-m', 'Add an update banner']);
+      File('${dir.path}/pubspec.yaml').writeAsStringSync('name: eclipse\nversion: 1.10.2+3\n');
+      git(['add', '-A']);
+      git(['commit', '-qm', 'Add an update banner']);
       await updater.check();
       expect(updater.status, UpdateStatus.available);
       expect(updater.newCommits, 2);
-      expect(updater.latest, 'Add an update banner');
+      expect(updater.newVersion, '1.10.2');
 
       updater.dismiss();
       await updater.check();
@@ -1252,25 +1263,25 @@ void main() {
     addTearDown(tester.view.reset);
 
     final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
-    final updater = Updater(repo: '/nowhere', installedCommit: 'abc', executable: '/nowhere/eclipse');
+    final updater = GitUpdater(repo: '/nowhere', installedCommit: 'abc', executable: '/nowhere/eclipse');
     await tester.pumpWidget(EclipseApp(state: state, updater: updater));
     await tester.pumpAndSettle();
-    expect(find.text('A new version is ready'), findsOneWidget, reason: 'built but hidden');
+    expect(find.text('A new version is available'), findsOneWidget, reason: 'built but hidden');
     expect(
       tester
           .widget<AnimatedOpacity>(
-            find.ancestor(of: find.text('A new version is ready'), matching: find.byType(AnimatedOpacity)).first,
+            find.ancestor(of: find.text('A new version is available'), matching: find.byType(AnimatedOpacity)).first,
           )
           .opacity,
       0,
     );
 
     updater
-      ..newCommits = 3
-      ..latest = 'Smooth every view switch, morph months, and save the journal as files'
+      ..newVersion = '1.10.2'
       ..status = UpdateStatus.available
       ..notifyListeners();
     await tester.pumpAndSettle();
+    expect(find.text('v1.10.2'), findsOneWidget);
     await _shoot(tester, 'update_available');
 
     updater

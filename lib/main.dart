@@ -22,7 +22,9 @@ Future<void> main() async {
   // ~/.local/share/dev.nicholas.productivity_app, unless you chose a folder.
   final dir = await getApplicationSupportDirectory();
   await dir.create(recursive: true);
-  final data = DataFolder.load(dir, await getApplicationDocumentsDirectory());
+  final documents = await getApplicationDocumentsDirectory();
+  DataFolder.leaveSandbox(dir, documents);
+  final data = DataFolder.load(dir, documents);
   await data.root.create(recursive: true);
   late final AppState state;
   state = AppState(
@@ -37,11 +39,12 @@ Future<void> main() async {
   _watchDate(state);
   _watchNightLight(state);
 
-  // Only when installed by linux/install.sh: watches its folder for newer commits.
-  final updater = Updater.forExecutable(Platform.resolvedExecutable, onRestart: () async => state.store.close());
+  // Installed by linux/install.sh: watches its folder for newer commits.
+  // On a Mac: asks GitHub for a newer release.
+  final updater = Updater.forThisApp(onRestart: () async => state.store.close());
   if (updater != null) {
     unawaited(updater.check());
-    Timer.periodic(const Duration(minutes: 2), (_) => updater.check());
+    Timer.periodic(updater.checkEvery, (_) => updater.check());
   }
 
   runApp(EclipseApp(state: state, updater: updater));
@@ -90,7 +93,15 @@ void _watchDate(AppState state) {
 
 /// Mirrors night light into [AppState]: hyprsunset can't announce a
 /// change, so it's asked every few seconds and whenever the window comes back.
+/// A Mac has no night light to read (Night Shift has no public API), so
+/// there it follows Dark mode, which macOS's Auto appearance turns on at
+/// sunset and off at sunrise.
 void _watchNightLight(AppState state) {
+  if (Platform.isMacOS) {
+    state.nightLightAvailable = true;
+    WidgetsBinding.instance.addObserver(_DarkModeObserver(state));
+    return;
+  }
   final nightLight = NightLight.forSession();
   if (nightLight == null) return;
   state.nightLightAvailable = true;
@@ -102,6 +113,18 @@ void _watchNightLight(AppState state) {
   unawaited(check());
   Timer.periodic(const Duration(seconds: 5), (_) => check());
   AppLifecycleListener(onResume: check, onShow: check);
+}
+
+class _DarkModeObserver with WidgetsBindingObserver {
+  _DarkModeObserver(this.state) {
+    didChangePlatformBrightness();
+  }
+
+  final AppState state;
+
+  @override
+  void didChangePlatformBrightness() =>
+      state.nightLightIs(WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
 }
 
 class EclipseApp extends StatelessWidget {

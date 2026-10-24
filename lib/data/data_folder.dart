@@ -55,6 +55,34 @@ class DataFolder {
     _pointer(home).writeAsStringSync(folder.path);
   }
 
+  /// Mac copies up to 1.10.1 ran sandboxed, which kept everything inside
+  /// ~/Library/Containers. The first unsandboxed start copies it out to
+  /// [home] and [documents], unless there's data there already; the old copy
+  /// stays where it was.
+  static void leaveSandbox(Directory home, Directory documents) {
+    final userHome = Platform.environment['HOME'];
+    if (!Platform.isMacOS || userHome == null) return;
+    if (hasData(home) || _pointer(home).existsSync()) return;
+    final id = p.basename(home.path);
+    final container = p.join(userHome, 'Library', 'Containers', id, 'Data');
+    final oldHome = Directory(p.join(container, 'Library', 'Application Support', id));
+    if (!hasData(oldHome)) return;
+    final oldJournal = Directory(p.join(container, 'Documents', 'Eclipse Journal'));
+    final journal = Directory(p.join(documents.path, 'Eclipse Journal'));
+    if (FileSystemEntity.typeSync(oldJournal.path, followLinks: false) == FileSystemEntityType.directory) {
+      _copyTree(oldJournal, journal);
+    }
+    _copyTree(Directory(p.join(oldHome.path, 'backups')), Directory(p.join(home.path, 'backups')));
+    final pointer = _pointer(oldHome);
+    if (pointer.existsSync()) pointer.copySync(_pointer(home).path);
+    // The write-ahead log may hold the latest changes. The database itself
+    // goes last, so a half-finished copy never looks like data to use.
+    for (final name in ['productivity.db-wal', 'productivity.db-shm', 'productivity.db']) {
+      final file = File(p.join(oldHome.path, name));
+      if (file.existsSync()) file.copySync(p.join(home.path, name));
+    }
+  }
+
   static void _copyTree(Directory from, Directory to) {
     if (!from.existsSync()) return;
     for (final entity in from.listSync(recursive: true)) {

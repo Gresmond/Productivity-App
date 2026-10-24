@@ -5,7 +5,8 @@ A desktop habit tracker and to-do planner, built with Flutter.
 - **Today**: daily rituals with streaks, plus today / this week / this month to-dos and a journal.
 - **Months**: the full ritual-by-day grid for any month, with per-month ritual lists.
 - Six colour themes in light/dark pairs. On Hyprland it can follow night
-  light, switching to the dark partner while it's on. Everything is stored locally in SQLite
+  light, switching to the dark partner while it's on; on a Mac it follows
+  Dark mode instead (set Appearance to Auto to have that change at sunset). Everything is stored locally in SQLite
   (`~/.local/share/dev.nicholas.productivity_app/productivity.db` on Linux).
 - The journal is saved as one Markdown file per day in
   `~/Documents/Eclipse Journal/<year>/`, readable without the app. (The
@@ -22,6 +23,10 @@ The fonts are built into the app, so there is nothing else to install.
 3. Open Eclipse from Applications. The first time, macOS says it can't
    verify the app: click **Done**, then go to **System Settings → Privacy &
    Security**, scroll down and click **Open Anyway**. After that it opens normally.
+
+**Updating:** Eclipse checks GitHub for a newer release every few hours.
+When there is one, a card in the bottom-right corner names it; **Download**
+fetches the new `Eclipse.dmg`, to install the same way.
 
 ## Installing on Linux
 
@@ -48,4 +53,16 @@ flutter run -d linux
 After changing `design/icon/eclipse.svg`, run `tool/make_icons.sh` to redraw
 the macOS icon sizes.
 
-New Mac builds are published by pushing a version tag (`git tag v1.0.1 && git push --tags`).
+## Versions
+
+Versions read `<year since 2025>.<month>.<release that month>`: 1.10.1 is
+October 2026's first, and January 2027 starts again at 2.1.1. Each commit
+bumps the version in `pubspec.yaml` by itself, once the hook is turned on
+(once per clone):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Every push to `main` with a version that has no release yet builds
+`Eclipse.dmg` on GitHub and publishes it as release `v<version>`.

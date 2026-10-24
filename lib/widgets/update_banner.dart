@@ -5,7 +5,8 @@ import '../theme/app_theme.dart';
 import 'fade_through.dart';
 
 /// A small card floating over the bottom-right corner when a newer version
-/// is ready: one click rebuilds and reopens the app. It floats rather than
+/// is out, naming it: one click rebuilds and reopens the app (on a Mac,
+/// downloads it). It floats rather than
 /// taking space, so the Today view keeps fitting the window.
 class UpdateBanner extends StatefulWidget {
   const UpdateBanner({super.key, required this.updater});
@@ -58,11 +59,10 @@ class _Card extends StatelessWidget {
     final p = context.palette;
     final isDark = p.brightness == Brightness.dark;
 
-    final count = updater.newCommits;
     final (String title, String? detail) = switch (status) {
       UpdateStatus.available || UpdateStatus.none => (
-        'A new version is ready',
-        [if (count != null) count == 1 ? '1 change' : '$count changes', ?updater.latest].join('  ·  '),
+        'A new version is available',
+        updater.newVersion == null ? null : 'v${updater.newVersion}',
       ),
       UpdateStatus.updating => ('Updating Eclipse', 'Building the new version. This takes about a minute.'),
       UpdateStatus.failed => ('Couldn’t update', updater.error),
@@ -105,7 +105,7 @@ class _Card extends StatelessWidget {
           Row(
             children: [
               _Button(
-                label: status == UpdateStatus.failed ? 'Try again' : 'Update and reopen',
+                label: status == UpdateStatus.failed ? 'Try again' : updater.actionLabel,
                 filled: true,
                 onTap: updater.update,
               ),

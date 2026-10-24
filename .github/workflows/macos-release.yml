@@ -1,15 +1,22 @@
 # Builds Eclipse.dmg on a GitHub-hosted Mac.
-# Push a tag like v1.0.0 to publish it as a GitHub Release; "Run workflow"
-# on the Actions tab builds it as a downloadable artifact without releasing.
+# Each push to main whose pubspec.yaml version has no release yet publishes
+# one, tagged v<version>; "Run workflow" on the Actions tab builds it as a
+# downloadable artifact without releasing.
 name: macOS release
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# A newer push replaces a build still running: only the latest version
+# needs releasing.
+concurrency:
+  group: macos-release
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -17,7 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read version
+        id: version
+        run: |
+          version="$(sed -n 's/^version: *//p' pubspec.yaml)"
+          version="${version%%+*}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: subosito/flutter-action@v2
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         with:
           channel: stable
           flutter-version: 3.47.7
@@ -26,6 +46,7 @@ jobs:
       # On failure, repeat the error lines and the end of the output as
       # annotations, which (unlike the log) are visible without signing in.
       - name: Build app
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           set -o pipefail
           if ! flutter build macos --release 2>&1 | tee build.log; then
@@ -40,6 +61,7 @@ jobs:
       # A disk image with the app next to an Applications shortcut, so
       # installing is a single drag.
       - name: Make disk image
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           mkdir dmg
           cp -R build/macos/Build/Products/Release/Eclipse.app dmg/
@@ -53,6 +75,10 @@ jobs:
           path: Eclipse.dmg
 
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.version.outputs.new == 'true' && github.event_name == 'push'
         with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Eclipse ${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
           files: Eclipse.dmg
