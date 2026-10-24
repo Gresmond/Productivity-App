@@ -51,6 +51,9 @@ class AppState extends ChangeNotifier {
   /// 1-12 when a month tab is open, null for the Today view.
   int? viewMonth;
 
+  /// The year's record is open (with [viewMonth] null).
+  bool viewingYear = false;
+
   /// A past day the Today view is showing, to look at only; null for today.
   DateTime? viewDay;
 
@@ -240,6 +243,7 @@ class AppState extends ChangeNotifier {
 
   void showToday() {
     viewMonth = null;
+    viewingYear = false;
     viewDay = null;
     viewYear = today.year;
     notifyListeners();
@@ -248,20 +252,30 @@ class AppState extends ChangeNotifier {
   /// Opens a past day's card in the Today view.
   void showDay(DateTime day) {
     viewMonth = null;
+    viewingYear = false;
     viewDay = day.isBefore(today) ? dateOnly(day) : null;
     viewYear = today.year;
     notifyListeners();
   }
 
+  /// Opens the record of [viewYear]: every month's percentages at once.
+  void showYear() {
+    viewMonth = null;
+    viewDay = null;
+    viewingYear = true;
+    notifyListeners();
+  }
+
   void showMonth(int month) {
     viewMonth = month;
+    viewingYear = false;
     viewDay = null;
     notifyListeners();
   }
 
   void shiftYear(int delta) {
     viewYear += delta;
-    viewMonth ??= today.month;
+    if (!viewingYear) viewMonth ??= today.month;
     notifyListeners();
   }
 

@@ -13,6 +13,7 @@ import '../widgets/fade_through.dart';
 import '../widgets/update_banner.dart';
 import 'month_view.dart';
 import 'today_view.dart';
+import 'year_view.dart';
 
 /// Window chrome: title, year switcher and month tabs.
 class Shell extends StatelessWidget {
@@ -36,7 +37,9 @@ class Shell extends StatelessWidget {
           // card stays put when you move between months.
           child: FadeThrough(
             layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
-            child: month == null
+            child: state.viewingYear
+                ? YearView(key: ValueKey('year ${state.viewYear}'), year: state.viewYear)
+                : month == null
                 ? TodayView(key: ValueKey('today ${dateKey(state.shownDay)}'))
                 : MonthView(key: const ValueKey('month'), year: state.viewYear, month: month),
           ),
@@ -72,7 +75,9 @@ class _Header extends StatelessWidget {
     // After midnight but before the day starts, say so: the date shown is
     // the day you're still finishing.
     final weekday = weekdayNames[shown.weekday - 1];
-    final (String kicker, String title) = month == null
+    final (String kicker, String title) = state.viewingYear
+        ? (state.viewYear == today.year ? 'Year to date' : 'The whole year', '${state.viewYear}')
+        : month == null
         ? (
             state.viewDay != null
                 ? '$weekday  ·  ${shown.year != today.year ? '${shown.year}  ·  ' : ''}looking back'
@@ -126,7 +131,7 @@ class _Header extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     // On the Today view the date opens a calendar of past days.
-                    if (month == null) _DateButton(title: title, style: titleStyle) else Text(title, style: titleStyle),
+                    if (month == null && !state.viewingYear) _DateButton(title: title, style: titleStyle) else Text(title, style: titleStyle),
                   ],
                 ),
               ),
@@ -158,9 +163,9 @@ class _Header extends StatelessWidget {
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none,
                     child: _TabBar(
-                      selected: month ?? 0,
+                      selected: state.viewingYear ? 13 : month ?? 0,
                       tabs: [
-                        _Tab(label: 'Today', selected: month == null, onTap: state.showToday),
+                        _Tab(label: 'Today', selected: month == null && !state.viewingYear, onTap: state.showToday),
                         for (var m = 1; m <= 12; m++)
                           _Tab(
                             label: monthNames[m - 1].substring(0, 3),
@@ -169,6 +174,7 @@ class _Header extends StatelessWidget {
                             future: DateTime(state.viewYear, m).isAfter(today),
                             onTap: () => state.showMonth(m),
                           ),
+                        _Tab(label: 'Year', selected: state.viewingYear, onTap: state.showYear),
                       ],
                     ),
                   ),
@@ -407,7 +413,7 @@ class _PickerDayState extends State<_PickerDay> {
 class _TabBar extends StatefulWidget {
   const _TabBar({required this.tabs, required this.selected});
 
-  /// Today first, then January to December.
+  /// Today first, then January to December, then the year.
   final List<Widget> tabs;
 
   /// Index into [tabs].
@@ -477,7 +483,8 @@ class _TabBarState extends State<_TabBar> {
               // the label.
               KeyedSubtree(key: _keys[i], child: tab),
               const SizedBox(width: 2),
-              if (i == 0)
+              // Today and Year stand apart from the months.
+              if (i == 0 || i == widget.tabs.length - 2)
                 Container(
                   width: 1,
                   height: 18,

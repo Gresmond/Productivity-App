@@ -1185,6 +1185,40 @@ void main() {
     expect(state.viewDay, isNull);
   });
 
+  testWidgets('the year tab adds up every month', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24));
+    final read = state.habits.firstWhere((h) => h.name == 'Read');
+    for (final (month, days) in [(8, 10), (9, 4), (10, 2)]) {
+      state.habitsFor(2026, month);
+      for (var d = 1; d <= days; d++) {
+        state.cycle(DateTime(2026, month, d), read); // done
+      }
+      state.cycle(DateTime(2026, month, 20), read);
+      state.cycle(DateTime(2026, month, 20), read); // not done
+    }
+    state.cycle(DateTime(2026, 10, 3), state.sleepHabits.first);
+
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Year').last);
+    await tester.pumpAndSettle();
+    expect(state.viewingYear, isTrue);
+    expect(find.text('YEAR TO DATE'), findsNWidgets(3), reason: 'kicker and both tables');
+    expect(find.text('91%'), findsWidgets, reason: 'August: 10 of 11');
+    expect(find.text('80%'), findsWidgets, reason: 'Read so far: 16 of 20');
+    await _shoot(tester, 'year');
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+    expect(state.viewingYear, isTrue, reason: 'the year switcher stays on the record');
+    expect(find.text('2025'), findsWidgets);
+  });
+
   testWidgets('theme switcher, and every theme renders', (tester) async {
     await _loadFonts();
     tester.view.physicalSize = const Size(1440, 900);
