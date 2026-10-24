@@ -17,7 +17,14 @@ class Store {
 
   Store.memory() : this._(sqlite3.openInMemory());
 
+  /// The time in milliseconds, in SQL, for sync's triggers.
+  static const _now = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+
   final Database _db;
+
+  /// The database itself, for the sync engine, which works below the
+  /// level of rituals and to-dos.
+  Database get raw => _db;
 
   void close() => _db.close();
 
@@ -31,7 +38,13 @@ class Store {
   }
 
   /// Replaces everything in this database with the copy at [path].
+  ///
+  /// What sync knows of your other computers stays as it was, and every
+  /// row is marked changed, so the restored data is sent to them as new
+  /// edits rather than being overwritten by their newer copies.
   Future<void> restoreFrom(String path) async {
+    final known = _db.select('SELECT * FROM sync_reg').toList();
+    final seen = _db.select('SELECT * FROM sync_seen').toList();
     final source = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       final check = source.select('PRAGMA quick_check').first.columnAt(0);
@@ -41,6 +54,22 @@ class Store {
       source.close();
     }
     _migrate(); // the copy may be from an older version of the app
+    _transaction(() {
+      _db.execute('DELETE FROM sync_reg');
+      _db.execute('DELETE FROM sync_seen');
+      final reg = _db.prepare('INSERT INTO sync_reg VALUES (?, ?, ?, ?, ?, ?, ?)');
+      for (final r in known) {
+        reg.execute([r['kind'], r['rowkey'], r['field'], r['value'], r['ts'], r['origin'], r['vv']]);
+      }
+      reg.close();
+      final file = _db.prepare('INSERT INTO sync_seen VALUES (?, ?)');
+      for (final r in seen) {
+        file.execute([r['file'], r['stamp']]);
+      }
+      file.close();
+      _db.execute('INSERT OR IGNORE INTO sync_dirty SELECT DISTINCT kind, rowkey, $_now FROM sync_reg');
+    });
+    markAllChanged();
   }
 
   void _migrate() {
@@ -181,6 +210,97 @@ class Store {
         PRAGMA user_version = 7;
       ''');
     }
+    if (version < 8) {
+      _transaction(() {
+        _db.execute('''
+          -- Ids that mean the same ritual or to-do on every computer. Rows
+          -- from before get one made from their id, so a backup from before
+          -- names them the same way; the sleep schedule's are the same on
+          -- every install.
+          ALTER TABLE habits ADD COLUMN uid TEXT;
+          UPDATE habits SET uid = 'h' || id;
+          UPDATE habits SET uid = 'sleep-' || (SELECT item FROM sleep_habits WHERE habit_id = habits.id)
+            WHERE id IN (SELECT habit_id FROM sleep_habits);
+          CREATE UNIQUE INDEX habits_uid ON habits (uid);
+          ALTER TABLE todos ADD COLUMN uid TEXT;
+          UPDATE todos SET uid = 't' || id;
+          CREATE UNIQUE INDEX todos_uid ON todos (uid);
+
+          -- Sync. Each field of each row is a register: its value, when and
+          -- where it was last set, and a version per computer, which says
+          -- whether two edits saw each other.
+          CREATE TABLE sync_reg (
+            kind TEXT NOT NULL,
+            rowkey TEXT NOT NULL,
+            field TEXT NOT NULL,
+            value TEXT,
+            ts INTEGER NOT NULL,
+            origin TEXT NOT NULL,
+            vv TEXT NOT NULL,
+            PRIMARY KEY (kind, rowkey, field)
+          ) WITHOUT ROWID;
+          CREATE INDEX sync_reg_origin ON sync_reg (origin, ts);
+
+          -- Rows written since sync last looked, and when, filled by the
+          -- triggers below.
+          CREATE TABLE sync_dirty (
+            kind TEXT NOT NULL,
+            rowkey TEXT NOT NULL,
+            at INTEGER NOT NULL,
+            PRIMARY KEY (kind, rowkey)
+          ) WITHOUT ROWID;
+
+          -- Other computers' change files already read, by size and time.
+          CREATE TABLE sync_seen (file TEXT PRIMARY KEY, stamp TEXT NOT NULL);
+        ''');
+        const habit = "(SELECT uid FROM habits WHERE id = R.habit_id)";
+        final keys = {
+          'month_habit': ('month_habits', "R.year || '-' || R.month || '/' || $habit", null),
+          'entry': ('entries', "R.day || '/' || $habit", null),
+          'todo': ('todos', 'R.uid', null),
+          'journal': ('journal', 'R.day', null),
+          'sleep_note': ('sleep_notes', "R.year || '-' || R.month || '/' || R.item", null),
+          'setting': ('settings', 'R.key', 'R.key IN (${syncedSettings.map((k) => "'$k'").join(', ')})'),
+        };
+        for (final MapEntry(key: kind, value: (table, rowkey, filter)) in keys.entries) {
+          // Not INSERT OR IGNORE: an upsert's own conflict handling overrides
+          // a trigger's.
+          String mark(String row) {
+            final key = rowkey.replaceAll('R.', '$row.');
+            return "UPDATE sync_dirty SET at = $_now WHERE kind = '$kind' AND rowkey = $key; "
+                "INSERT INTO sync_dirty SELECT '$kind', $key, $_now "
+                "WHERE $key IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sync_dirty WHERE kind = '$kind' AND rowkey = $key);";
+          }
+
+          String only(String row) => filter == null ? '' : 'WHEN ${filter.replaceAll('R.', '$row.')} ';
+          _db.execute('CREATE TRIGGER ${table}_ins AFTER INSERT ON $table ${only('NEW')}BEGIN ${mark('NEW')} END');
+          _db.execute(
+            'CREATE TRIGGER ${table}_upd AFTER UPDATE ON $table ${filter == null ? '' : 'WHEN ${filter.replaceAll('R.', 'NEW.')} OR ${filter.replaceAll('R.', 'OLD.')} '}'
+            'BEGIN ${mark('OLD')} ${mark('NEW')} END',
+          );
+          _db.execute('CREATE TRIGGER ${table}_del AFTER DELETE ON $table ${only('OLD')}BEGIN ${mark('OLD')} END');
+        }
+        _db.execute('PRAGMA user_version = 8');
+      });
+    }
+  }
+
+  /// Settings that are the same on every computer. The theme isn't: each
+  /// follows its own night light.
+  static const syncedSettings = ['dayStartHour', 'restWeekends'];
+
+  /// Marks every row as changed, for sync to compare with what it knows.
+  void markAllChanged() {
+    _db.execute('''
+      INSERT OR IGNORE INTO sync_dirty SELECT *, $_now FROM (
+        SELECT 'month_habit', year || '-' || month || '/' || h.uid FROM month_habits JOIN habits h ON h.id = habit_id
+        UNION ALL SELECT 'entry', day || '/' || h.uid FROM entries JOIN habits h ON h.id = habit_id
+        UNION ALL SELECT 'todo', uid FROM todos
+        UNION ALL SELECT 'journal', day FROM journal
+        UNION ALL SELECT 'sleep_note', year || '-' || month || '/' || item FROM sleep_notes
+        UNION ALL SELECT 'setting', key FROM settings WHERE key IN (${syncedSettings.map((k) => "'$k'").join(', ')})
+      )
+    ''');
   }
 
   // Habits
@@ -256,7 +376,7 @@ class Store {
   }
 
   Habit addHabit(int year, int month, String name) {
-    _db.execute('INSERT INTO habits DEFAULT VALUES');
+    _db.execute('INSERT INTO habits (uid) VALUES (lower(hex(randomblob(8))))');
     final id = _db.lastInsertRowId;
     _db.execute(
       'INSERT INTO month_habits (year, month, habit_id, name, position) VALUES (?, ?, ?, ?, '
@@ -378,13 +498,10 @@ class Store {
   }
 
   TodoItem addTodo(TodoScope scope, DateTime day, String text, {bool done = false}) {
-    _db.execute('INSERT INTO todos (scope, period, text, done, since) VALUES (?, ?, ?, ?, ?)', [
-      scope.name,
-      scope.period(day),
-      text,
-      done ? 1 : 0,
-      dateKey(day),
-    ]);
+    _db.execute(
+      'INSERT INTO todos (uid, scope, period, text, done, since) VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?)',
+      [scope.name, scope.period(day), text, done ? 1 : 0, dateKey(day)],
+    );
     return TodoItem(_db.lastInsertRowId, text, since: day, done: done);
   }
 

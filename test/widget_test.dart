@@ -14,6 +14,7 @@ import 'package:eclipse/data/data_folder.dart';
 import 'package:eclipse/data/journal_files.dart';
 import 'package:eclipse/data/night_light.dart';
 import 'package:eclipse/data/store.dart';
+import 'package:eclipse/data/sync_service.dart';
 import 'package:eclipse/data/updates.dart';
 import 'package:eclipse/main.dart';
 import 'package:eclipse/screens/today_view.dart';
@@ -47,6 +48,19 @@ Future<void> _loadFonts() async {
     final loader = FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(icons.readAsBytesSync())));
     await loader.load();
   }
+}
+
+/// Takes a database back to before sync (version 7): its triggers, tables
+/// and the ids that mean the same on every computer.
+void _undoSync(Database db) {
+  for (final r in db.select("SELECT name FROM sqlite_master WHERE type = 'trigger'")) {
+    db.execute('DROP TRIGGER ${r['name']}');
+  }
+  db.execute('''
+    DROP TABLE sync_reg; DROP TABLE sync_dirty; DROP TABLE sync_seen;
+    DROP INDEX habits_uid; ALTER TABLE habits DROP COLUMN uid;
+    DROP INDEX todos_uid; ALTER TABLE todos DROP COLUMN uid;
+  ''');
 }
 
 /// A store holding the rituals of the spreadsheet the app replaced, which
@@ -445,6 +459,7 @@ void main() {
       final path = '${Directory.systemTemp.createTempSync('productivity_since').path}/old.db';
       Store.open(path).close();
       final db = sqlite3.open(path);
+      _undoSync(db);
       db.execute('''
         DROP TABLE sleep_notes; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 5;
         INSERT INTO todos (scope, period, text, carried) VALUES
@@ -574,6 +589,7 @@ void main() {
       Store.open(path).close();
       // Back to how a database looked before the sleep schedule.
       final db = sqlite3.open(path);
+      _undoSync(db);
       db.execute('''
         DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits;
         ALTER TABLE month_habits DROP COLUMN note; DROP TABLE sleep_notes; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 2;
@@ -710,6 +726,7 @@ void main() {
       final path = '${Directory.systemTemp.createTempSync('productivity_notes_v4').path}/old.db';
       Store.open(path).close();
       final db = sqlite3.open(path);
+      _undoSync(db);
       db.execute('''
         ALTER TABLE month_habits DROP COLUMN note; ALTER TABLE habits ADD COLUMN note TEXT;
         INSERT INTO habits (note) VALUES ('Home gym');
@@ -850,10 +867,12 @@ void main() {
     var now = DateTime(2026, 10, 20);
     late AppState state;
     await tester.runAsync(() async {
+      final store = _fill(Store.open('${dir.path}/app.db'));
       state = AppState(
-        _fill(Store.open('${dir.path}/app.db')),
+        store,
         backups: backups,
         dataFolder: DataFolder.load(dir, dir),
+        sync: SyncService.load(dir, store),
         clock: () => now,
       );
       for (var d = 21; d <= 23; d++) {
@@ -867,7 +886,7 @@ void main() {
 
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Backups'));
+    await tester.tap(find.byTooltip('Backups and sync'));
     await tester.pumpAndSettle();
     expect(find.text('Friday 23 October'), findsOneWidget);
     expect(find.text('Yesterday'), findsOneWidget);

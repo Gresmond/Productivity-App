@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/backups_dialog.dart';
 import '../widgets/fade_menu.dart';
 import '../widgets/fade_through.dart';
+import '../widgets/sync_banner.dart';
 import '../widgets/update_banner.dart';
 import '../widgets/welcome_tour.dart';
 import 'month_view.dart';
@@ -54,6 +55,7 @@ class Shell extends StatelessWidget {
         children: [
           Positioned.fill(child: page),
           if (updater != null) Positioned(right: 32, bottom: 28, child: UpdateBanner(updater: updater)),
+          if (state.sync != null) Positioned(left: 32, bottom: 28, child: SyncBanner(sync: state.sync!)),
           if (state.touring) const Positioned.fill(child: WelcomeTour()),
         ],
       ),
@@ -636,7 +638,7 @@ class _BackupsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Tooltip(
-      message: 'Backups',
+      message: 'Backups and sync',
       child: Material(
         color: Colors.transparent,
         shape: const CircleBorder(),

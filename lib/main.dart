@@ -10,6 +10,7 @@ import 'data/data_folder.dart';
 import 'data/journal_files.dart';
 import 'data/night_light.dart';
 import 'data/store.dart';
+import 'data/sync_service.dart';
 import 'data/system_time_zone.dart';
 import 'data/updates.dart';
 import 'models.dart';
@@ -26,14 +27,18 @@ Future<void> main() async {
   DataFolder.leaveSandbox(dir, documents);
   final data = DataFolder.load(dir, documents);
   await data.root.create(recursive: true);
+  final store = Store.open(data.database);
   late final AppState state;
   state = AppState(
-    Store.open(data.database),
+    store,
     backups: Backups(data.backups),
     journalFiles: JournalFiles(data.journal),
     dataFolder: data,
+    sync: SyncService.load(dir, store),
     restart: () => _restart(state),
   );
+  state.sync?.start();
+  if (state.sync?.isOn ?? false) unawaited(state.sync!.run());
 
   if (state.firstRun) state.startTour();
   _watchDate(state);

@@ -6,6 +6,8 @@ import 'data/backups.dart';
 import 'data/data_folder.dart';
 import 'data/journal_files.dart';
 import 'data/store.dart';
+import 'data/sync.dart';
+import 'data/sync_service.dart';
 import 'models.dart';
 import 'theme/app_theme.dart';
 
@@ -17,9 +19,20 @@ class AppState extends ChangeNotifier {
     this.backups,
     this.journalFiles,
     this.dataFolder,
+    this.sync,
     this.restart,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {
+    sync?.onIncoming = _takeIncoming;
+    sync?.onClear = (days) {
+      for (final day in days) {
+        try {
+          journalFiles?.write(DateTime.parse(day), '');
+        } catch (e) {
+          debugPrint('Removing journal file failed: $e');
+        }
+      }
+    };
     today = dayOf(_clock(), dayStartHour);
     lateNight = dateOnly(_clock()) != today;
     viewYear = today.year;
@@ -59,6 +72,25 @@ class AppState extends ChangeNotifier {
   /// Where everything is kept; null in tests.
   final DataFolder? dataFolder;
 
+  /// Keeps everything the same on your other computers; null in tests.
+  final SyncService? sync;
+
+  /// Brings in what sync merged from another computer.
+  void _takeIncoming(Incoming incoming) {
+    for (final day in incoming.journalDays) {
+      try {
+        journalFiles?.write(DateTime.parse(day), store.journal(day));
+      } catch (e) {
+        debugPrint('Saving journal file failed: $e');
+      }
+    }
+    // Only a changed journal resets the journal's text field.
+    if (incoming.journalDays.isNotEmpty) restores++;
+    _load();
+    checkDate();
+    notifyListeners();
+  }
+
   /// Reopens the app; null in tests.
   final Future<void> Function()? restart;
 
@@ -68,6 +100,7 @@ class AppState extends ChangeNotifier {
     dataFolder!.moveTo(folder, store);
     await restart?.call();
   }
+
   final DateTime Function() _clock;
 
   /// The day ticks, to-dos and the journal count towards: the calendar
