@@ -16,7 +16,7 @@ import 'fade_menu.dart';
 import 'fade_through.dart';
 import 'setting_rows.dart';
 
-/// Settings, in two ribbons: General, and Backups and sync. Restoring a
+/// Settings, in two ribbons: General, and Data. Restoring a
 /// backup asks first, inline on its row. Pops with the restored [Backup],
 /// or nothing.
 class SettingsDialog extends StatefulWidget {
@@ -27,7 +27,7 @@ class SettingsDialog extends StatefulWidget {
 }
 
 class _SettingsDialogState extends State<SettingsDialog> {
-  /// 0 for General, 1 for Backups and sync. Always opens on General.
+  /// 0 for General, 1 for Data. Always opens on General.
   int _ribbon = 0;
 
   late List<Backup> _backups = AppScope.of(context).backups?.list() ?? [];
@@ -198,7 +198,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     ),
                   ),
                   _Ribbons(
-                    labels: const ['General', 'Backups and sync'],
+                    labels: const ['General', 'Data'],
                     selected: _ribbon,
                     onSelect: (i) => setState(() {
                       _ribbon = i;
@@ -212,8 +212,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 duration: Motion.morph,
                 curve: Motion.morphCurve,
                 alignment: Alignment.topCenter,
+                clipBehavior: Clip.none,
                 child: FadeThrough(
                   layoutBuilder: (current, previous) => Stack(
+                    clipBehavior: Clip.none,
                     alignment: Alignment.topLeft,
                     children: [
                       for (final w in previous) Positioned(left: 0, right: 0, top: 0, child: w),
@@ -372,6 +374,11 @@ extension on _SettingsDialogState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Your data',
+          style: TextStyle(fontFamily: Fonts.ui, fontSize: 16, fontWeight: FontWeight.w600, color: p.ink),
+        ),
+        const SizedBox(height: 14),
         if (state.dataFolder != null) ...[_dataFolder(p, state.dataFolder!)],
         if (state.sync != null) ...[
           const SizedBox(height: 10),
@@ -443,7 +450,7 @@ extension on _SettingsDialogState {
             children: [
               Expanded(
                 child: Text(
-                  'Your data',
+                  'Local data',
                   style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
                 ),
               ),
@@ -461,8 +468,7 @@ extension on _SettingsDialogState {
           ),
           const SizedBox(height: 4),
           Text(
-            'Every day, ritual, to-do and journal entry since you started is kept here'
-            '${data.journal.path.startsWith(data.root.path) ? '' : ' (the journal in ${_shortPath(data.journal.path)})'}. '
+            'Every day, ritual and to-do since you started is kept here. '
             'Uninstalling the app leaves it in place.',
             style: small,
           ),
