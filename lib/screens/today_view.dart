@@ -67,10 +67,7 @@ class TodayView extends StatelessWidget {
                   ),
                   const SizedBox(height: _gap),
                   Expanded(
-                    child: TourTarget(
-                      spot: TourSpot.journal,
-                      child: _JournalCard(key: ValueKey((dateKey(day), state.restores))),
-                    ),
+                    child: TourTarget(spot: TourSpot.journal, child: const _JournalCard()),
                   ),
                 ],
               ),
@@ -259,20 +256,27 @@ class _HabitsCard extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final rows = _layOutRows(context, habits, constraints);
-                // A past day is to look at only.
+                // A past day is to look at only. A day in a month with
+                // other rituals fades its list through; otherwise the rows
+                // stay and only their marks ease.
                 return IgnorePointer(
                   ignoring: past,
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemExtentBuilder: (i, _) => i < total ? rows.heights[i] : null,
-                    itemCount: total,
-                    itemBuilder: (context, i) => _HabitRow(
-                      habit: habits[i],
-                      day: day,
-                      cellSize: rows.cell,
-                      weekTrail: rows.trail,
-                      divider: i > 0,
-                      names: times ? [for (final h in habits) h.name] : null,
+                  child: FadeThrough(
+                    layoutBuilder: (current, previous) =>
+                        Stack(fit: StackFit.expand, children: [...previous, ?current]),
+                    child: ListView.builder(
+                      key: ValueKey([for (final h in habits) '${h.id} ${h.name}'].join('|')),
+                      padding: EdgeInsets.zero,
+                      itemExtentBuilder: (i, _) => i < total ? rows.heights[i] : null,
+                      itemCount: total,
+                      itemBuilder: (context, i) => _HabitRow(
+                        habit: habits[i],
+                        day: day,
+                        cellSize: rows.cell,
+                        weekTrail: rows.trail,
+                        divider: i > 0,
+                        names: times ? [for (final h in habits) h.name] : null,
+                      ),
                     ),
                   ),
                 );
@@ -478,7 +482,14 @@ class _WeekTrail extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    return Row(children: [for (var i = 7; i >= 1; i--) _mark(p, state, DateTime(day.year, day.month, day.day - i))]);
+    // Another day's week fades through in place.
+    return FadeThrough(
+      layoutBuilder: (current, previous) => Stack(alignment: Alignment.center, children: [...previous, ?current]),
+      child: Row(
+        key: ValueKey(dateKey(day)),
+        children: [for (var i = 7; i >= 1; i--) _mark(p, state, DateTime(day.year, day.month, day.day - i))],
+      ),
+    );
   }
 
   // A rest day's blank mark fades rather than snapping; the colour itself
@@ -507,20 +518,55 @@ class _WeekTrail extends StatelessWidget {
   }
 }
 
-class _JournalCard extends StatefulWidget {
-  const _JournalCard({super.key});
+/// Stays put from day to day; another day's words fade through inside it.
+class _JournalCard extends StatelessWidget {
+  const _JournalCard();
 
   @override
-  State<_JournalCard> createState() => _JournalCardState();
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final day = state.shownDay;
+    return Tile(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TileHeader(
+            title: 'Journal',
+            trailing: state.journalFiles == null ? null : _OpenFolderButton(state.journalFiles!.fileFor(day)),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: FadeThrough(
+              layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
+              child: _JournalText(key: ValueKey((dateKey(day), state.restores))),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _JournalCardState extends State<_JournalCard> {
+/// One day's words.
+class _JournalText extends StatefulWidget {
+  const _JournalText({super.key});
+
+  @override
+  State<_JournalText> createState() => _JournalTextState();
+}
+
+class _JournalTextState extends State<_JournalText> {
   TextEditingController? _controller;
   late AppState _state;
 
-  /// The day this card writes to. A new card takes over at midnight; words
-  /// typed just before it still land on the day they were typed.
+  /// The day this writes to. Another day gets a new one; words typed just
+  /// before midnight still land on the day they were typed.
   late DateTime _day;
+
+  /// Looking back: read only. Fixed when this day's text is made, so the
+  /// outgoing day doesn't change as it fades.
+  late bool _past;
 
   /// Saves a moment after typing stops, rather than writing the database
   /// and the day's file on every keystroke.
@@ -532,6 +578,7 @@ class _JournalCardState extends State<_JournalCard> {
     _state = AppScope.of(context);
     if (_controller == null) {
       _day = _state.shownDay;
+      _past = _state.viewDay != null;
       _controller = TextEditingController(text: _state.journalOf(_day));
     }
   }
@@ -557,36 +604,19 @@ class _JournalCardState extends State<_JournalCard> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final state = AppScope.of(context);
-
-    return Tile(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TileHeader(
-            title: 'Journal',
-            trailing: state.journalFiles == null ? null : _OpenFolderButton(state.journalFiles!.fileFor(_day)),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              readOnly: state.viewDay != null,
-              expands: true,
-              maxLines: null,
-              textAlignVertical: TextAlignVertical.top,
-              style: TextStyle(fontFamily: Fonts.body, fontSize: 14, height: 1.35, color: p.ink),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: state.viewDay != null ? 'Nothing written this day.' : null,
-                hintStyle: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.inkMuted.withValues(alpha: 0.6)),
-              ),
-              onChanged: _changed,
-            ),
-          ),
-        ],
+    return TextField(
+      controller: _controller,
+      readOnly: _past,
+      expands: true,
+      maxLines: null,
+      textAlignVertical: TextAlignVertical.top,
+      style: TextStyle(fontFamily: Fonts.body, fontSize: 14, height: 1.35, color: p.ink),
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        hintText: _past ? 'Nothing written this day.' : null,
+        hintStyle: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.inkMuted.withValues(alpha: 0.6)),
       ),
+      onChanged: _changed,
     );
   }
 }

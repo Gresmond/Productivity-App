@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'fade_through.dart';
 
 /// The base card surface every panel sits on.
 class Tile extends StatelessWidget {
@@ -19,10 +20,7 @@ class Tile extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            p.tile,
-            isDark ? p.tile : Color.lerp(p.tile, p.background, 0.14)!,
-          ],
+          colors: [p.tile, isDark ? p.tile : Color.lerp(p.tile, p.background, 0.14)!],
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: p.tileBorder.withValues(alpha: 0.9), width: 1.0),
@@ -82,14 +80,25 @@ class TileHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: p.tileBorder.withValues(alpha: 0.6), width: 0.8),
             ),
-            child: Text(
-              caption!.toUpperCase(),
-              style: TextStyle(
-                fontFamily: Fonts.ui,
-                fontSize: 10.5,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w600,
-                color: p.inkMuted,
+            // A new count fades through, and the pill eases to its width.
+            child: AnimatedSize(
+              duration: Motion.click,
+              curve: Motion.clickCurve,
+              child: FadeThrough(
+                duration: Motion.click,
+                layoutBuilder: (current, previous) =>
+                    Stack(alignment: Alignment.center, children: [...previous, ?current]),
+                child: Text(
+                  caption!.toUpperCase(),
+                  key: ValueKey(caption),
+                  style: TextStyle(
+                    fontFamily: Fonts.ui,
+                    fontSize: 10.5,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
+                    color: p.inkMuted,
+                  ),
+                ),
               ),
             ),
           ),

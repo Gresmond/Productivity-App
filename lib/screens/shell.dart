@@ -35,13 +35,14 @@ class Shell extends StatelessWidget {
         const _Header(),
         Expanded(
           // Months share one MonthView, whose grid morphs in place, so the
-          // card stays put when you move between months.
+          // card stays put when you move between months. Days share one
+          // TodayView the same way: only what differs fades or eases.
           child: FadeThrough(
             layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
             child: state.viewingYear
                 ? YearView(key: ValueKey('year ${state.viewYear}'), year: state.viewYear)
                 : month == null
-                ? TodayView(key: ValueKey('today ${dateKey(state.shownDay)}'))
+                ? const TodayView(key: ValueKey('today'))
                 : MonthView(key: const ValueKey('month'), year: state.viewYear, month: month),
           ),
         ),

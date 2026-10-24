@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import 'appear.dart';
+import 'fade_through.dart';
 import 'hover_fill.dart';
 import 'mark.dart';
 import 'tile.dart';
@@ -47,6 +48,10 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
   Set<int>? _seen;
   int _generation = 0;
 
+  /// The day whose list is showing. Another day's list fades through as a
+  /// whole, rather than its rows gliding or fading in one by one.
+  DateTime? _shownDay;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +84,12 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
     final items = [...all.where((t) => t.done), ...all.where((t) => !t.done)];
     final open = all.length - all.where((t) => t.done).length;
     final order = [for (final t in items) t.id];
+    final listDay = day ?? state.today;
+    if (listDay != _shownDay) {
+      _shownDay = listDay;
+      _order = order;
+      _seen = {...order};
+    }
     if (!_sameOrder(order, _order)) {
       // A removed row has already closed up, so only a reorder glides.
       if (_order.isNotEmpty && order.length >= _order.length) {
@@ -104,95 +115,128 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
           const SizedBox(height: 10),
           // Fills the card; scrolls only if the list outgrows it.
           Expanded(
-            child: items.isEmpty
-                ? Center(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+            child: FadeThrough(
+              layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
+              child: KeyedSubtree(
+                key: ValueKey(dateKey(listDay)),
+                child: items.isEmpty
+                    ? Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: p.empty.withValues(alpha: 0.6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.wb_sunny_outlined,
+                                    size: 16,
+                                    color: p.inkMuted.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'All clear',
+                                  style: TextStyle(
+                                    fontFamily: Fonts.body,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: p.inkMuted.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        child: _SlidingColumn(
+                          progress: _curved,
+                          generation: _generation,
+                          lift: p.tile,
+                          shadow: p.shadow,
                           children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.6), shape: BoxShape.circle),
-                              child: Icon(Icons.wb_sunny_outlined, size: 16, color: p.inkMuted.withValues(alpha: 0.7)),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'All clear',
-                              style: TextStyle(
-                                fontFamily: Fonts.body,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: p.inkMuted.withValues(alpha: 0.7),
+                            // Each row drawn once and moved as a picture while it glides.
+                            for (final item in items)
+                              RepaintBoundary(
+                                key: ValueKey(item.id),
+                                child: _TodoRow(
+                                  scope: widget.scope,
+                                  item: item,
+                                  day: day ?? state.today,
+                                  readOnly: day != null,
+                                  fadeIn: seen.add(item.id),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    child: _SlidingColumn(
-                      progress: _curved,
-                      generation: _generation,
-                      lift: p.tile,
-                      shadow: p.shadow,
-                      children: [
-                        // Each row drawn once and moved as a picture while it glides.
-                        for (final item in items)
-                          RepaintBoundary(
-                            key: ValueKey(item.id),
-                            child: _TodoRow(
-                              scope: widget.scope,
-                              item: item,
-                              day: day ?? state.today,
-                              readOnly: day != null,
-                              fadeIn: seen.add(item.id),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-          ),
-          if (day == null)
-            Container(
-              margin: const EdgeInsets.only(top: 6, right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
-              decoration: BoxDecoration(
-                color: p.empty.withValues(alpha: _focus.hasFocus ? 0.65 : 0.45),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _focus.hasFocus ? p.accent.withValues(alpha: 0.45) : Colors.transparent,
-                  width: 1.0,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.add_rounded, size: 18, color: _focus.hasFocus ? p.accent : p.inkMuted),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focus,
-                      textCapitalization: TextCapitalization.sentences,
-                      inputFormatters: const [_CapitaliseFirst()],
-                      style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.ink),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        border: InputBorder.none,
-                        hintText: 'Add a task',
-                        hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.65)),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 9),
-                      ),
-                      onSubmitted: (_) => _submit(state),
-                    ),
-                  ),
-                ],
               ),
             ),
+          ),
+          // Kept while looking back, folded away, so it eases out and back
+          // rather than snapping.
+          ClipRect(
+            child: AnimatedAlign(
+              duration: Motion.morph,
+              curve: Motion.morphCurve,
+              alignment: Alignment.topCenter,
+              heightFactor: day == null ? 1 : 0,
+              child: AnimatedOpacity(
+                duration: Motion.morph,
+                curve: Motion.morphCurve,
+                opacity: day == null ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: day != null,
+                  child: ExcludeFocus(
+                    excluding: day != null,
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 6, right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: p.empty.withValues(alpha: _focus.hasFocus ? 0.65 : 0.45),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _focus.hasFocus ? p.accent.withValues(alpha: 0.45) : Colors.transparent,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.add_rounded, size: 18, color: _focus.hasFocus ? p.accent : p.inkMuted),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _controller,
+                              focusNode: _focus,
+                              textCapitalization: TextCapitalization.sentences,
+                              inputFormatters: const [_CapitaliseFirst()],
+                              style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.ink),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                hintText: 'Add a task',
+                                hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.65)),
+                                contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                              ),
+                              onSubmitted: (_) => _submit(state),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

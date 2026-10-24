@@ -16,6 +16,7 @@ import 'package:eclipse/data/night_light.dart';
 import 'package:eclipse/data/store.dart';
 import 'package:eclipse/data/updates.dart';
 import 'package:eclipse/main.dart';
+import 'package:eclipse/screens/today_view.dart';
 import 'package:eclipse/models.dart';
 import 'package:eclipse/theme/app_theme.dart';
 import 'package:eclipse/theme/oklch.dart';
@@ -1317,12 +1318,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(state.viewDay, isNull, reason: 'the future is not open');
     await tester.tap(find.text('22'));
+    // The cards stay put through the change: their headings never fade,
+    // while the journal's words fade through to the other day's.
+    double opacity(Finder f) => tester
+        .widgetList<FadeTransition>(find.ancestor(of: f, matching: find.byType(FadeTransition)))
+        .fold(1.0, (a, t) => a * t.opacity.value);
+    var journalDipped = false;
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.byType(TodayView).evaluate().isEmpty) continue;
+      for (final heading in ['Daily rituals', 'Sleep schedule', 'This week', 'This month', 'Journal']) {
+        expect(opacity(find.text(heading)), 1, reason: '$heading stays while the day changes');
+      }
+      final words = find.text('A quiet Thursday.');
+      if (words.evaluate().isNotEmpty && opacity(words) < 0.9) journalDipped = true;
+    }
+    expect(journalDipped, isTrue, reason: "the journal's words fade in");
     await tester.pumpAndSettle();
 
     expect(state.viewDay, DateTime(2026, 10, 22));
     expect(find.text('THURSDAY  ·  LOOKING BACK'), findsOneWidget);
     expect(find.text('A quiet Thursday.'), findsOneWidget);
-    expect(find.text('Add a task'), findsNothing, reason: 'look only');
+    expect(find.text('Add a task').hitTestable(), findsNothing, reason: 'look only');
     expect(find.text('From 22/10'), findsNothing, reason: 'it was new that day');
     await _shoot(tester, 'past_day');
 
