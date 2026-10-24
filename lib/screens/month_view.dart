@@ -29,11 +29,12 @@ class _MonthViewState extends State<MonthView> {
   static const _chrome = 500.0;
 
   bool _editing = false;
+  bool _editingSleep = false;
 
   @override
   void didUpdateWidget(MonthView old) {
     super.didUpdateWidget(old);
-    if (old.year != widget.year || old.month != widget.month) _editing = false;
+    if (old.year != widget.year || old.month != widget.month) _editing = _editingSleep = false;
   }
 
   @override
@@ -48,9 +49,9 @@ class _MonthViewState extends State<MonthView> {
     final label = future
         ? 'PREVIEW  ·  COPIES YOUR LATEST RITUALS'
         : state.isPreviewMonth(year, month)
-            ? 'PREVIEW  ·  SAVED WHEN YOU TICK OR EDIT'
-            : 'RITUALS  ·  ${habits.length}';
-    final sleep = state.sleepHabits;
+        ? 'PREVIEW  ·  SAVED WHEN YOU TICK OR EDIT'
+        : 'RITUALS  ·  ${habits.length}';
+    final sleep = state.sleepHabitsFor(year, month);
     // Squares as big as they can be with both cards on screen at once.
     final maxCell = (height - _chrome) / (habits.length + sleep.length) - 5;
 
@@ -86,20 +87,71 @@ class _MonthViewState extends State<MonthView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('SLEEP SCHEDULE  ·  ${sleep.length}', style: header),
+                // The button hangs over the header line rather than making it
+                // taller, so the two grids still fit the window.
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const SizedBox(width: double.infinity),
+                    Text('SLEEP SCHEDULE  ·  ${sleep.length}', style: header),
+                    Positioned(
+                      right: 0,
+                      top: -12,
+                      child: _editButton(
+                        future,
+                        _editingSleep,
+                        'Edit notes',
+                        () => setState(() => _editingSleep = !_editingSleep),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 22),
-                _Grid(
-                  year: year,
-                  month: month,
-                  habits: sleep,
-                  nameWidth: _nameWidth,
-                  maxCell: maxCell,
-                  doneLabel: 'of the logged schedule kept',
+                AnimatedSize(
+                  duration: Motion.morph,
+                  curve: Motion.morphCurve,
+                  alignment: Alignment.topCenter,
+                  clipBehavior: Clip.none,
+                  child: FadeThrough(
+                    layoutBuilder: FadeThrough.sizeToCurrent,
+                    child: KeyedSubtree(
+                      key: ValueKey(_editingSleep),
+                      child: _editingSleep
+                          ? _SleepEditor(year: year, month: month)
+                          : _Grid(
+                              year: year,
+                              month: month,
+                              habits: sleep,
+                              nameWidth: _nameWidth,
+                              maxCell: maxCell,
+                              doneLabel: 'of the logged schedule kept',
+                            ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Kept in place for future months, just faded, so the header row
+  /// doesn't change height between months.
+  Widget _editButton(bool future, bool editing, String label, VoidCallback onTap) {
+    return IgnorePointer(
+      ignoring: future,
+      child: AnimatedOpacity(
+        opacity: future ? 0 : 1,
+        duration: Motion.morph,
+        curve: Motion.morphCurve,
+        child: _PillButton(
+          label: editing ? 'Done' : label,
+          icon: editing ? Icons.check_rounded : Icons.edit_outlined,
+          filled: editing,
+          onTap: onTap,
+        ),
       ),
     );
   }
@@ -118,22 +170,7 @@ class _MonthViewState extends State<MonthView> {
                 child: Text(label, key: ValueKey(label), style: header),
               ),
               const Spacer(),
-              // Kept in place for future months, just faded, so the header
-              // row doesn't change height between months.
-              IgnorePointer(
-                ignoring: future,
-                child: AnimatedOpacity(
-                  opacity: future ? 0 : 1,
-                  duration: Motion.morph,
-                  curve: Motion.morphCurve,
-                  child: _PillButton(
-                    label: _editing ? 'Done' : 'Edit rituals',
-                    icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
-                    filled: _editing,
-                    onTap: () => setState(() => _editing = !_editing),
-                  ),
-                ),
-              ),
+              _editButton(future, _editing, 'Edit rituals', () => setState(() => _editing = !_editing)),
             ],
           ),
           const SizedBox(height: 22),
@@ -265,7 +302,11 @@ class _GridState extends State<_Grid> with TickerProviderStateMixin {
         // month to month and only their places animate.
         double colFor(double days) => (gridWidth(days) - nameWidth) / days;
         final width = gridWidth(dayCount.toDouble());
-        final cell = [colFor(31) - 6, widget.maxCell, _maxCell].reduce((a, b) => a < b ? a : b).clamp(_minCol - 6, _maxCell);
+        final cell = [
+          colFor(31) - 6,
+          widget.maxCell,
+          _maxCell,
+        ].reduce((a, b) => a < b ? a : b).clamp(_minCol - 6, _maxCell);
         final columns = [
           for (var d = 1; d <= 31; d++)
             if (_dayAt(d) case final day?) (number: d, day: day, leaving: d > dayCount),
@@ -787,6 +828,95 @@ class _RitualEditorState extends State<_RitualEditor> {
             'Changes apply to ${monthNames[month - 1]} only. '
             'Each new month starts as a copy of the one before.',
             style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The sleep schedule's tooltips for one month. The four items themselves
+/// stay put.
+class _SleepEditor extends StatelessWidget {
+  const _SleepEditor({required this.year, required this.month});
+
+  final int year;
+  final int month;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final state = AppScope.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 580),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final h in state.sleepHabitsFor(year, month))
+            _SleepNoteRow(key: ValueKey(h.id), year: year, month: month, habit: h),
+          const SizedBox(height: 18),
+          Text(
+            'Notes show when you hover over an item. Changes apply to ${monthNames[month - 1]} only; '
+            'each new month starts with the one before\'s.',
+            style: TextStyle(fontFamily: Fonts.body, fontSize: 13, color: p.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SleepNoteRow extends StatefulWidget {
+  const _SleepNoteRow({super.key, required this.year, required this.month, required this.habit});
+
+  final int year;
+  final int month;
+  final Habit habit;
+
+  @override
+  State<_SleepNoteRow> createState() => _SleepNoteRowState();
+}
+
+class _SleepNoteRowState extends State<_SleepNoteRow> {
+  late final _note = TextEditingController(text: widget.habit.description);
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final state = AppScope.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2.5),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+      decoration: BoxDecoration(
+        color: p.empty.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.tileBorder.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.habit.name,
+            style: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.ink),
+          ),
+          TextField(
+            controller: _note,
+            maxLines: null,
+            style: TextStyle(fontFamily: Fonts.body, fontSize: 12.5, color: p.inkMuted),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+              hintText: 'Add a note',
+              hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.5)),
+            ),
+            onChanged: (v) => state.setSleepNote(widget.year, widget.month, widget.habit, v),
           ),
         ],
       ),

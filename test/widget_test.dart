@@ -352,7 +352,7 @@ void main() {
       Store.open(path).close();
       final db = sqlite3.open(path);
       db.execute('''
-        ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 5;
+        DROP TABLE sleep_notes; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 5;
         INSERT INTO todos (scope, period, text, carried) VALUES
           ('today', '2026-10-24', 'Day', 2), ('week', '2026-10-19', 'Week', 1), ('month', '2026-10', 'Month', 1);
       ''');
@@ -482,7 +482,7 @@ void main() {
       final db = sqlite3.open(path);
       db.execute('''
         DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits;
-        ALTER TABLE month_habits DROP COLUMN note; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 2;
+        ALTER TABLE month_habits DROP COLUMN note; DROP TABLE sleep_notes; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 2;
       ''');
       final ids = <String, int>{};
       for (final (i, name) in [
@@ -545,6 +545,26 @@ void main() {
     });
   });
 
+  test('sleep notes belong to their month, and a new month starts with the last', () {
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24));
+    String note(int month) => state.sleepHabitsFor(2026, month).first.description ?? '(name)';
+    expect(note(10), 'Awaken at 8:30 am');
+
+    state.setSleepNote(2026, 10, state.sleepHabitsFor(2026, 10).first, 'Up by 8 am');
+    expect(note(10), 'Up by 8 am');
+    expect(note(9), 'Awaken at 8:30 am', reason: 'earlier months keep theirs');
+    expect(note(11), 'Up by 8 am', reason: 'a new month copies the last');
+
+    state.setSleepNote(2026, 9, state.sleepHabitsFor(2026, 9).first, '');
+    expect(note(9), '(name)', reason: 'blank shows just the name');
+    expect(note(10), 'Up by 8 am', reason: 'an edit stays in its month');
+
+    state.setSleepNote(2026, 8, state.sleepHabitsFor(2026, 8).first, 'Summer hours');
+    expect(note(9), '(name)');
+    expect(note(10), 'Up by 8 am');
+    expect(state.sleepHabitsFor(2026, 10)[1].description, startsWith('Complete daily tasks'), reason: 'others untouched');
+  });
+
   group('ritual notes', () {
     test("a note belongs to its month: copied into a new one, then edited apart", () {
       final dir = Directory.systemTemp.createTempSync('productivity_notes');
@@ -580,7 +600,7 @@ void main() {
       db.execute('''
         ALTER TABLE month_habits DROP COLUMN note; ALTER TABLE habits ADD COLUMN note TEXT;
         INSERT INTO habits (note) VALUES ('Home gym');
-        ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 4;
+        DROP TABLE sleep_notes; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 4;
       ''');
       final id = db.lastInsertRowId;
       db.execute("INSERT INTO month_habits VALUES (2026, 9, ?, 'Gym', 0), (2026, 10, ?, 'Gym', 0)", [id, id]);
@@ -808,6 +828,17 @@ void main() {
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(find.text('Stretch'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Edit notes'));
+    await tester.tap(find.text('Edit notes'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Sleep at 11 pm'), 'Lights out by 11');
+    expect(state.sleepHabits.last.description, 'Lights out by 11');
+    await tester.ensureVisible(find.text('Done'));
+    await _shoot(tester, 'sleep_edit');
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit notes'), findsOneWidget);
   });
 
   testWidgets('the month view fits rituals and sleep schedule without scrolling', (tester) async {

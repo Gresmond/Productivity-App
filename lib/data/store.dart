@@ -167,6 +167,20 @@ class Store {
         ''');
       });
     }
+    if (version < 7) {
+      _db.execute('''
+        -- Your own text for a sleep item's tooltip, from this month on until
+        -- a later month has its own. Empty: show just the name.
+        CREATE TABLE sleep_notes (
+          year INTEGER NOT NULL,
+          month INTEGER NOT NULL,
+          item TEXT NOT NULL,
+          note TEXT NOT NULL,
+          PRIMARY KEY (year, month, item)
+        );
+        PRAGMA user_version = 7;
+      ''');
+    }
   }
 
   // Habits
@@ -175,22 +189,47 @@ class Store {
   bool get isEmpty =>
       _db.select('SELECT 1 FROM habits WHERE id NOT IN (SELECT habit_id FROM sleep_habits) LIMIT 1').isEmpty;
 
-  List<Habit> sleepHabits() {
+  /// The sleep schedule as it reads in a month: each item's tooltip is the
+  /// text from that month, or the nearest month before with its own, or
+  /// the original wording.
+  List<Habit> sleepHabits(int year, int month) {
     final ids = {
       for (final r in _db.select('SELECT item, habit_id FROM sleep_habits')) r['item'] as String: r['habit_id'] as int,
     };
     return [
-      for (final item in SleepItem.values) Habit(ids[item.name]!, item.label, description: item.description),
+      for (final item in SleepItem.values)
+        Habit(ids[item.name]!, item.label, description: _nonEmpty(sleepNote(year, month, item) ?? item.description)),
     ];
   }
 
+  static String? _nonEmpty(String s) => s.isEmpty ? null : s;
+
+  /// Your text for [item] in force in this month; null if never written.
+  /// With [own], only text written for this very month.
+  String? sleepNote(int year, int month, SleepItem item, {bool own = false}) {
+    final r = _db.select(
+      'SELECT note FROM sleep_notes WHERE item = ? AND year * 12 + month ${own ? '=' : '<='} ? '
+      'ORDER BY year * 12 + month DESC LIMIT 1',
+      [item.name, year * 12 + month],
+    );
+    return r.isEmpty ? null : r.first['note'] as String;
+  }
+
+  void setSleepNote(int year, int month, SleepItem item, String note) {
+    _db.execute(
+      'INSERT INTO sleep_notes (year, month, item, note) VALUES (?, ?, ?, ?) '
+      'ON CONFLICT (year, month, item) DO UPDATE SET note = excluded.note',
+      [year, month, item.name, note],
+    );
+  }
+
   List<Habit> monthHabits(int year, int month) => [
-        for (final r in _db.select(
-          'SELECT habit_id, name, note FROM month_habits WHERE year = ? AND month = ? ORDER BY position',
-          [year, month],
-        ))
-          Habit(r['habit_id'] as int, r['name'] as String, description: r['note'] as String?),
-      ];
+    for (final r in _db.select(
+      'SELECT habit_id, name, note FROM month_habits WHERE year = ? AND month = ? ORDER BY position',
+      [year, month],
+    ))
+      Habit(r['habit_id'] as int, r['name'] as String, description: r['note'] as String?),
+  ];
 
   /// The closest month that has a ritual list, preferring earlier months.
   (int, int)? nearestMonthWithHabits(int year, int month) {
@@ -226,48 +265,52 @@ class Store {
   }
 
   void renameHabit(int year, int month, int habitId, String name) {
-    _db.execute(
-      'UPDATE month_habits SET name = ? WHERE year = ? AND month = ? AND habit_id = ?',
-      [name, year, month, habitId],
-    );
+    _db.execute('UPDATE month_habits SET name = ? WHERE year = ? AND month = ? AND habit_id = ?', [
+      name,
+      year,
+      month,
+      habitId,
+    ]);
   }
 
   void setHabitNote(int year, int month, int habitId, String? note) {
-    _db.execute(
-      'UPDATE month_habits SET note = ? WHERE year = ? AND month = ? AND habit_id = ?',
-      [note, year, month, habitId],
-    );
+    _db.execute('UPDATE month_habits SET note = ? WHERE year = ? AND month = ? AND habit_id = ?', [
+      note,
+      year,
+      month,
+      habitId,
+    ]);
   }
 
   void removeHabit(int year, int month, int habitId) {
-    _db.execute(
-      'DELETE FROM month_habits WHERE year = ? AND month = ? AND habit_id = ?',
-      [year, month, habitId],
-    );
+    _db.execute('DELETE FROM month_habits WHERE year = ? AND month = ? AND habit_id = ?', [year, month, habitId]);
   }
 
   void reorderHabits(int year, int month, List<int> habitIds) {
     _transaction(() {
       for (final (i, id) in habitIds.indexed) {
-        _db.execute(
-          'UPDATE month_habits SET position = ? WHERE year = ? AND month = ? AND habit_id = ?',
-          [i, year, month, id],
-        );
+        _db.execute('UPDATE month_habits SET position = ? WHERE year = ? AND month = ? AND habit_id = ?', [
+          i,
+          year,
+          month,
+          id,
+        ]);
       }
     });
   }
 
   // Entries
 
-  Iterable<({String day, int habitId, HabitStatus status, String? note})> entries() =>
-      _db.select('SELECT day, habit_id, status, note FROM entries').map(
-            (r) => (
-              day: r['day'] as String,
-              habitId: r['habit_id'] as int,
-              status: HabitStatus.values[r['status'] as int],
-              note: r['note'] as String?,
-            ),
-          );
+  Iterable<({String day, int habitId, HabitStatus status, String? note})> entries() => _db
+      .select('SELECT day, habit_id, status, note FROM entries')
+      .map(
+        (r) => (
+          day: r['day'] as String,
+          habitId: r['habit_id'] as int,
+          status: HabitStatus.values[r['status'] as int],
+          note: r['note'] as String?,
+        ),
+      );
 
   void setEntry(String day, int habitId, HabitStatus status) {
     if (status == HabitStatus.none) {
@@ -282,21 +325,18 @@ class Store {
   }
 
   void setNote(String day, int habitId, String? note) {
-    _db.execute(
-      'UPDATE entries SET note = ? WHERE day = ? AND habit_id = ?',
-      [note, day, habitId],
-    );
+    _db.execute('UPDATE entries SET note = ? WHERE day = ? AND habit_id = ?', [note, day, habitId]);
   }
 
   // To-dos
 
   List<TodoItem> todos(TodoScope scope, String period) => [
-        for (final r in _db.select(
-          'SELECT id, text, done, carried, since FROM todos WHERE scope = ? AND period = ? ORDER BY id',
-          [scope.name, period],
-        ))
-          _todo(r),
-      ];
+    for (final r in _db.select(
+      'SELECT id, text, done, carried, since FROM todos WHERE scope = ? AND period = ? ORDER BY id',
+      [scope.name, period],
+    ))
+      _todo(r),
+  ];
 
   /// The list as it stood on [day]: everything added by then and still open
   /// that day. An item ticked off later shows unticked, as it was.
@@ -313,12 +353,12 @@ class Store {
   }
 
   static TodoItem _todo(Row r) => TodoItem(
-        r['id'] as int,
-        r['text'] as String,
-        since: DateTime.parse(r['since'] as String),
-        done: r['done'] == 1,
-        carried: r['carried'] as int,
-      );
+    r['id'] as int,
+    r['text'] as String,
+    since: DateTime.parse(r['since'] as String),
+    done: r['done'] == 1,
+    carried: r['carried'] as int,
+  );
 
   /// Moves unfinished to-dos from earlier periods into [period]. Returns how
   /// many moved.
@@ -336,10 +376,13 @@ class Store {
   }
 
   TodoItem addTodo(TodoScope scope, DateTime day, String text, {bool done = false}) {
-    _db.execute(
-      'INSERT INTO todos (scope, period, text, done, since) VALUES (?, ?, ?, ?, ?)',
-      [scope.name, scope.period(day), text, done ? 1 : 0, dateKey(day)],
-    );
+    _db.execute('INSERT INTO todos (scope, period, text, done, since) VALUES (?, ?, ?, ?, ?)', [
+      scope.name,
+      scope.period(day),
+      text,
+      done ? 1 : 0,
+      dateKey(day),
+    ]);
     return TodoItem(_db.lastInsertRowId, text, since: day, done: done);
   }
 

@@ -111,7 +111,11 @@ class AppState extends ChangeNotifier {
 
   /// Night light as last seen, kept across restarts so a change while the
   /// app was closed still switches, but a restart alone doesn't.
-  late bool? _nightLight = switch (store.setting('nightLight')) { '1' => true, '0' => false, _ => null };
+  late bool? _nightLight = switch (store.setting('nightLight')) {
+    '1' => true,
+    '0' => false,
+    _ => null,
+  };
 
   void setFollowNightLight(bool follow) {
     followNightLight = follow;
@@ -204,7 +208,7 @@ class AppState extends ChangeNotifier {
     restWeekends = store.setting('restWeekends') == '1';
     followNightLight = store.setting('followNightLight') != '0';
     dayStartHour = int.tryParse(store.setting('dayStartHour') ?? '') ?? 0;
-    sleepHabits = store.sleepHabits();
+    _monthSleep.clear();
     _streaks.clear();
     _startDay();
   }
@@ -263,14 +267,38 @@ class AppState extends ChangeNotifier {
 
   // Ritual lists
 
-  bool isFutureMonth(int year, int month) =>
-      year * 12 + month > today.year * 12 + today.month;
+  bool isFutureMonth(int year, int month) => year * 12 + month > today.year * 12 + today.month;
 
   /// Today's month's rituals.
   List<Habit> get habits => habitsFor(today.year, today.month);
 
-  /// The sleep schedule, the same in every month.
-  late List<Habit> sleepHabits = store.sleepHabits();
+  /// Today's month's sleep schedule.
+  List<Habit> get sleepHabits => sleepHabitsFor(today.year, today.month);
+
+  final Map<(int, int), List<Habit>> _monthSleep = {};
+
+  /// The sleep schedule: the same four items in every month, each month
+  /// with its own tooltips.
+  List<Habit> sleepHabitsFor(int year, int month) => _monthSleep[(year, month)] ??= store.sleepHabits(year, month);
+
+  /// This month's tooltip for a sleep item; blank shows just its name. A
+  /// new month starts with the month before's, and an edit changes only
+  /// its own month: the month after keeps what it had.
+  void setSleepNote(int year, int month, Habit h, String note) {
+    final item = SleepItem.values[sleepHabitsFor(year, month).indexWhere((x) => x.id == h.id)];
+    final next = DateTime(year, month + 1);
+    if (!isFutureMonth(next.year, next.month) && store.sleepNote(next.year, next.month, item, own: true) == null) {
+      store.setSleepNote(
+        next.year,
+        next.month,
+        item,
+        sleepHabitsFor(next.year, next.month)[item.index].description ?? '',
+      );
+    }
+    store.setSleepNote(year, month, item, note.trim());
+    _monthSleep.clear();
+    notifyListeners();
+  }
 
   /// A month's ritual list. A month between your first list and today is
   /// saved as a copy of the month before it. Future months, and months
@@ -345,8 +373,7 @@ class AppState extends ChangeNotifier {
 
   // Entries
 
-  HabitStatus statusOf(DateTime day, Habit h) =>
-      _status[_cell(day, h)] ?? HabitStatus.none;
+  HabitStatus statusOf(DateTime day, Habit h) => _status[_cell(day, h)] ?? HabitStatus.none;
 
   String? noteOf(DateTime day, Habit h) => _notes[_cell(day, h)];
 
@@ -388,8 +415,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  int doneOn(DateTime day, List<Habit> habits) =>
-      habits.where((h) => statusOf(day, h) == HabitStatus.done).length;
+  int doneOn(DateTime day, List<Habit> habits) => habits.where((h) => statusOf(day, h) == HabitStatus.done).length;
 
   /// Consecutive done days ending today (or yesterday, if today is still
   /// open). An "other" day, or a blank rest day, is excused: it neither
@@ -398,8 +424,7 @@ class AppState extends ChangeNotifier {
 
   int bestStreak(Habit h) => _streaksOf(h).$2;
 
-  bool _excused(DateTime day, HabitStatus s) =>
-      s == HabitStatus.other || (s == HabitStatus.none && isRestDay(day));
+  bool _excused(DateTime day, HabitStatus s) => s == HabitStatus.other || (s == HabitStatus.none && isRestDay(day));
 
   (int, int) _streaksOf(Habit h) => _streaks[h.id] ??= (_current(h), _best(h));
 
@@ -526,9 +551,7 @@ class AppState extends ChangeNotifier {
 }
 
 class AppScope extends InheritedNotifier<AppState> {
-  const AppScope({super.key, required AppState state, required super.child})
-      : super(notifier: state);
+  const AppScope({super.key, required AppState state, required super.child}) : super(notifier: state);
 
-  static AppState of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
+  static AppState of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }

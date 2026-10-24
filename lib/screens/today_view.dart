@@ -84,7 +84,7 @@ class _HabitColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final day = state.shownDay;
-    final rituals = state.habitsFor(day.year, day.month), sleep = state.sleepHabits;
+    final rituals = state.habitsFor(day.year, day.month), sleep = state.sleepHabitsFor(day.year, day.month);
     return LayoutBuilder(
       builder: (context, constraints) {
         final rows = constraints.maxHeight - 2 * _HabitsCard.chrome - TodayView._gap;
