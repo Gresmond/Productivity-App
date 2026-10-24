@@ -621,11 +621,11 @@ class _SettingsButton extends StatelessWidget {
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black54,
-      transitionDuration: Motion.morph,
+      transitionDuration: Motion.click,
       pageBuilder: (_, _, _) => const SettingsDialog(),
-      // The fade menus' open: fades in while growing from 96%.
+      // Fades in while growing from 96%, quick like a click.
       transitionBuilder: (_, animation, _, child) {
-        final t = CurvedAnimation(parent: animation, curve: Motion.morphCurve);
+        final t = CurvedAnimation(parent: animation, curve: Motion.clickCurve);
         return FadeTransition(
           opacity: t,
           child: ScaleTransition(scale: t.drive(Tween(begin: 0.96, end: 1.0)), child: child),
