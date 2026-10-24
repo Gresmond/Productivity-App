@@ -1034,20 +1034,23 @@ class _TimeWheelState extends State<_TimeWheel> {
       required ValueChanged<int> onChanged,
       double width = 56,
     }) {
-      Widget item(int i) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => controller.animateToItem(
-          // The nearest way round to it.
-          loop ? controller.selectedItem + (i - controller.selectedItem % count + count ~/ 2) % count - count ~/ 2 : i,
-          duration: Motion.click,
-          curve: Motion.clickCurve,
-        ),
-        child: Center(
-          child: AnimatedDefaultTextStyle(
-            duration: Motion.hover,
-            curve: Motion.hoverCurve,
-            style: style.copyWith(color: i == selected ? p.ink : p.inkMuted.withValues(alpha: 0.75)),
-            child: Text(label(i)),
+      Widget item(int i) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => controller.animateToItem(
+            // The nearest way round to it.
+            loop ? controller.selectedItem + (i - controller.selectedItem % count + count ~/ 2) % count - count ~/ 2 : i,
+            duration: Motion.click,
+            curve: Motion.clickCurve,
+          ),
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: Motion.hover,
+              curve: Motion.hoverCurve,
+              style: style.copyWith(color: i == selected ? p.ink : p.inkMuted.withValues(alpha: 0.75)),
+              child: Text(label(i)),
+            ),
           ),
         ),
       );

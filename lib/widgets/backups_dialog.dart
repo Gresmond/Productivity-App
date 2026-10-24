@@ -305,9 +305,15 @@ extension on _BackupsDialogState {
     final rclone = SyncService.findRclone() != null;
     final remotes = _remotes;
 
+    // Saying yes to sync wears the tick's colour, even before it can be pressed.
     Widget button(String label, VoidCallback? onTap, {bool filled = false}) => filled
         ? FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: p.accent, foregroundColor: p.onAccent),
+            style: FilledButton.styleFrom(
+              backgroundColor: p.done,
+              foregroundColor: p.onAccent,
+              disabledBackgroundColor: p.done.withValues(alpha: 0.45),
+              disabledForegroundColor: p.onAccent.withValues(alpha: 0.8),
+            ),
             onPressed: onTap,
             child: Text(label),
           )

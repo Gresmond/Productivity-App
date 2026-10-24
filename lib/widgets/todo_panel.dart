@@ -477,6 +477,7 @@ class _TodoRowState extends State<_TodoRow> {
       child: IgnorePointer(
         ignoring: widget.readOnly,
         child: MouseRegion(
+          cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() {
             _hover = false;

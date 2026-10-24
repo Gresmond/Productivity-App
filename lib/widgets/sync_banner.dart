@@ -68,9 +68,12 @@ class _SyncBannerState extends State<SyncBanner> {
           curve: Motion.morphCurve,
           child: shown == null
               ? const SizedBox.shrink()
-              : GestureDetector(
-                  onTap: () => setState(() => _visible = false),
-                  child: _Card(incoming: shown),
+              : MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _visible = false),
+                    child: _Card(incoming: shown),
+                  ),
                 ),
         ),
       ),
