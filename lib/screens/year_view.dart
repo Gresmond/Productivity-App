@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import '../theme/oklch.dart';
 import '../widgets/tile.dart';
 
 /// The year at a glance: each ritual's month percentages side by side, then
@@ -204,8 +205,8 @@ class _Table extends StatelessWidget {
   }
 }
 
-/// A percentage on a square tinted by how high it is; a dash when nothing
-/// was logged.
+/// A percentage on a square tinted by how high it is, from missed through
+/// other to done; a dash when nothing was logged.
 class _Cell extends StatelessWidget {
   const _Cell({required this.ratio, this.future = false, this.strong = false});
 
@@ -217,6 +218,12 @@ class _Cell extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final r = ratio;
+    // 0% is the missed colour, 50% the other, 100% done.
+    final fill = r == null
+        ? p.empty.withValues(alpha: future ? 0.25 : 0.55)
+        : r < 0.5
+        ? Color.lerp(p.missed, p.other, r * 2)!
+        : Color.lerp(p.other, p.done, r * 2 - 1)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: AnimatedContainer(
@@ -224,19 +231,16 @@ class _Cell extends StatelessWidget {
         curve: Motion.morphCurve,
         height: 38,
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          color: r == null
-              ? p.empty.withValues(alpha: future ? 0.25 : 0.55)
-              : Color.lerp(p.empty, p.done, 0.15 + 0.85 * r),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: fill),
         child: Text(
           r == null ? '–' : '${(r * 100).round()}%',
           style: TextStyle(
             fontFamily: Fonts.ui,
             fontSize: strong ? 14 : 12.5,
             fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
-            color: r == null ? p.inkMuted.withValues(alpha: future ? 0.25 : 0.5) : (r > 0.55 ? p.onAccent : p.ink),
+            color: r == null
+                ? p.inkMuted.withValues(alpha: future ? 0.25 : 0.5)
+                : (contrast(fill, p.onAccent) >= contrast(fill, p.ink) ? p.onAccent : p.ink),
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),

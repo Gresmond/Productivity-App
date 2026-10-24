@@ -201,48 +201,24 @@ class _Header extends StatelessWidget {
 }
 
 /// The big date, which opens a calendar to look back at a past day.
-class _DateButton extends StatefulWidget {
+class _DateButton extends StatelessWidget {
   const _DateButton({required this.title, required this.style});
 
   final String title;
   final TextStyle style;
 
   @override
-  State<_DateButton> createState() => _DateButtonState();
-}
-
-class _DateButtonState extends State<_DateButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Tooltip(
-      message: 'Look back at another day',
-      waitDuration: const Duration(milliseconds: 600),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: () => showFadeMenu(context, alignLeft: true, width: 312, builder: (_) => const _DayPicker()),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(widget.title, style: widget.style),
-              const SizedBox(width: 6),
-              AnimatedOpacity(
-                opacity: _hover ? 1 : 0.35,
-                duration: Motion.hover,
-                curve: Motion.hoverCurve,
-                child: Icon(Icons.keyboard_arrow_down_rounded, size: 26, color: p.inkMuted),
-              ),
-            ],
-          ),
-        ),
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Look back at another day',
+    waitDuration: const Duration(milliseconds: 600),
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => showFadeMenu(context, alignLeft: true, width: 312, builder: (_) => const _DayPicker()),
+        child: Text(title, style: style),
       ),
-    );
-  }
+    ),
+  );
 }
 
 /// A month of days to pick from. Days after today can't be picked; picking
