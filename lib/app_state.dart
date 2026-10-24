@@ -24,13 +24,10 @@ class AppState extends ChangeNotifier {
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {
     sync?.onIncoming = _takeIncoming;
+    sync?.beforeJoin = () => backups?.beforeJoining(store);
     sync?.onClear = (days) {
       for (final day in days) {
-        try {
-          journalFiles?.write(DateTime.parse(day), '');
-        } catch (e) {
-          debugPrint('Removing journal file failed: $e');
-        }
+        _writeJournalFile(DateTime.parse(day), '');
       }
     };
     today = dayOf(_clock(), dayStartHour);
@@ -78,11 +75,7 @@ class AppState extends ChangeNotifier {
   /// Brings in what sync merged from another computer.
   void _takeIncoming(Incoming incoming) {
     for (final day in incoming.journalDays) {
-      try {
-        journalFiles?.write(DateTime.parse(day), store.journal(day));
-      } catch (e) {
-        debugPrint('Saving journal file failed: $e');
-      }
+      _writeJournalFile(DateTime.parse(day), store.journal(day));
     }
     // Only a changed journal resets the journal's text field.
     if (incoming.journalDays.isNotEmpty) restores++;
@@ -297,7 +290,14 @@ class AppState extends ChangeNotifier {
   /// Replaces all data with [backup]. What was there before is kept as a
   /// backup of its own.
   Future<void> restore(Backup backup) async {
+    final before = {for (final e in store.journalEntries()) e.day};
     await backups!.restore(store, backup);
+    // The journal's files follow: the restored entries written out, and
+    // the files of days the copy has no entry for removed.
+    final after = {for (final e in store.journalEntries()) e.day: e.text};
+    for (final day in {...before, ...after.keys}) {
+      _writeJournalFile(DateTime.parse(day), after[day] ?? '');
+    }
     restores++;
     _load();
     checkDate(); // the backup may start its days at another hour
@@ -571,16 +571,39 @@ class AppState extends ChangeNotifier {
 
   // Journal
 
-  String journalOf(DateTime day) => journalFiles?.read(day) ?? store.journal(dateKey(day));
+  /// The journal lives in the database. Its files are a copy for reading
+  /// outside the app, so one that's missing or can't be read (a Mac told
+  /// no to the Documents folder) never hides an entry.
+  String journalOf(DateTime day) => store.journal(dateKey(day));
 
   void setJournal(DateTime day, String text) {
     store.setJournal(dateKey(day), text);
+    _writeJournalFile(day, text);
+  }
+
+  /// Why the journal's files aren't being saved, for the folder button;
+  /// null while they are.
+  String? journalFileProblem;
+
+  /// Copies a day's entry to its file. A failure only means the copy is
+  /// behind: the database still has it, and the next save tries again.
+  void _writeJournalFile(DateTime day, String text) {
+    final files = journalFiles;
+    if (files == null) return;
+    String? problem;
     try {
-      journalFiles?.write(day, text);
-    } catch (e) {
-      // The database still has it, and the next keystroke tries again.
+      files.write(day, text);
+    } on FileSystemException catch (e) {
       debugPrint('Saving journal file failed: $e');
+      // EPERM: macOS's privacy settings keep Eclipse out of Documents.
+      problem = Platform.isMacOS && e.osError?.errorCode == 1
+          ? "Eclipse isn't allowed in your Documents folder, so the journal's files aren't being saved. "
+                'Allow it in System Settings, Privacy & Security, Files and Folders.'
+          : "The journal's files couldn't be saved (${e.osError?.message ?? e.message}).";
     }
+    if (problem == journalFileProblem) return;
+    journalFileProblem = problem;
+    notifyListeners();
   }
 
   /// Once: writes entries from before the journal moved to documents out as

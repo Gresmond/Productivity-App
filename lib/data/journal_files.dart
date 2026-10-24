@@ -8,8 +8,10 @@ import '../models.dart';
 /// open, read, copy or back up without the app:
 /// ~/Documents/Eclipse Journal/2026/2026-10-23.md
 ///
-/// The files are the journal. The database keeps a copy of each entry only
-/// so the daily backups include it.
+/// The database holds the journal; these are a copy of it, kept up to date
+/// as entries are written, synced or restored. Edits made to the files
+/// themselves aren't read back, and are replaced the next time that day is
+/// saved.
 class JournalFiles {
   JournalFiles(this.dir);
 
@@ -21,19 +23,6 @@ class JournalFiles {
       '# ${weekdayNames[day.weekday - 1]} ${day.day} ${monthNames[day.month - 1]} ${day.year}';
 
   bool has(DateTime day) => fileFor(day).existsSync();
-
-  /// The entry's text, without the date heading the file starts with.
-  String read(DateTime day) {
-    final file = fileFor(day);
-    if (!file.existsSync()) return '';
-    var text = file.readAsStringSync();
-    if (text.startsWith('# ')) {
-      final end = text.indexOf('\n');
-      text = end == -1 ? '' : text.substring(end + 1);
-      if (text.startsWith('\n')) text = text.substring(1);
-    }
-    return text.endsWith('\n') ? text.substring(0, text.length - 1) : text;
-  }
 
   /// Saves the day's entry; an empty entry removes its file. Written beside
   /// the file first and renamed, so a crash never leaves half an entry.

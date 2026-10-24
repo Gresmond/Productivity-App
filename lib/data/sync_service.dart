@@ -83,6 +83,10 @@ class SyncService extends ChangeNotifier {
   /// in the database: to redraw, and write journal files.
   void Function(Incoming)? onIncoming;
 
+  /// Called before joining replaces everything here, to save a copy of it
+  /// first. If it throws, nothing is replaced.
+  void Function()? beforeJoin;
+
   /// Called before joining with the journal days that were here, to remove
   /// their files.
   void Function(List<String> days)? onClear;
@@ -138,6 +142,7 @@ class SyncService extends ChangeNotifier {
   /// the start of it all.
   Future<void> turnOn(GoogleAccount account, {required bool join}) async {
     if (join) {
+      beforeJoin?.call();
       final days = engine.clearForJoining(); // not inside ?.call, which would skip it
       onClear?.call(days);
       _deliver(folder.read(engine));

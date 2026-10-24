@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:eclipse/app_state.dart';
+import 'package:eclipse/data/backups.dart';
 import 'package:eclipse/data/google_drive.dart';
 import 'package:eclipse/data/store.dart';
 import 'package:eclipse/data/sync.dart';
@@ -61,7 +63,9 @@ class _FakeDrive implements SyncDrive {
   @override
   Future<List<DriveFile>> list() async {
     _check();
-    return [for (final MapEntry(:key, :value) in files.entries) DriveFile(id: key, name: value.$1, modified: '${value.$3}')];
+    return [
+      for (final MapEntry(:key, :value) in files.entries) DriveFile(id: key, name: value.$1, modified: '${value.$3}'),
+    ];
   }
 
   @override
@@ -295,6 +299,27 @@ void main() {
       await onPc.run();
       await onLaptop.run();
       expect({for (final f in drive.files.values) f.$1: f.$3}, versions);
+      onPc.dispose();
+      onLaptop.dispose();
+    });
+
+    test('joining saves a copy of what was here first, listed with the backups', () async {
+      final onPc = service(pc), onLaptop = service(laptop);
+      await onPc.look(account);
+      await onPc.turnOn(account, join: false);
+
+      laptop.store.addTodo(TodoScope.today, DateTime(2026, 10, 24), 'Only on the laptop');
+      final backups = Backups(Directory('${dir.path}/backups'));
+      AppState(laptop.store, backups: backups, sync: onLaptop, clock: () => DateTime(2026, 10, 24));
+      await onLaptop.look(account);
+      await onLaptop.turnOn(account, join: true);
+      expect(laptop.dump(), pc.dump());
+
+      final copy = backups.list().singleWhere((b) => b.isBeforeJoin);
+      expect(copy.isBeforeRestore, isFalse);
+      final saved = Store.open(copy.file.path);
+      expect(saved.raw.select('SELECT text FROM todos').map((r) => r['text']), contains('Only on the laptop'));
+      saved.close();
       onPc.dispose();
       onLaptop.dispose();
     });

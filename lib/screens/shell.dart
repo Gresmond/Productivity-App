@@ -619,6 +619,8 @@ class _BackupsButton extends StatelessWidget {
     if (restored == null || !context.mounted) return;
     final from = restored.isBeforeRestore
         ? 'how things were before your last restore'
+        : restored.isBeforeJoin
+        ? 'how things were before joining sync'
         : '${restored.day!.day} ${monthNames[restored.day!.month - 1]}';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

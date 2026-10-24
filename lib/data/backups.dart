@@ -7,20 +7,25 @@ import 'store.dart';
 
 /// One saved copy of the database.
 class Backup {
-  Backup(this.file, this.day);
+  Backup(this.file, this.day, {this.isBeforeJoin = false});
 
   final File file;
 
-  /// The day it was taken; null for the copy saved just before a restore.
+  /// The day it was taken; null for the copies saved just before a restore
+  /// or before joining sync.
   final DateTime? day;
 
-  bool get isBeforeRestore => day == null;
+  /// Saved just before joining sync replaced everything here.
+  final bool isBeforeJoin;
+
+  bool get isBeforeRestore => day == null && !isBeforeJoin;
 
   DateTime get modified => file.lastModifiedSync();
 }
 
 /// Daily copies of the database in one folder, newest [keep] kept, plus a
-/// copy of whatever was there before the last restore.
+/// copy of whatever was there before the last restore, and before joining
+/// sync.
 class Backups {
   Backups(this.dir, {this.keep = 30});
 
@@ -29,14 +34,16 @@ class Backups {
 
   static final _daily = RegExp(r'^productivity-(\d{4})-(\d{2})-(\d{2})\.db$');
   static const _beforeRestore = 'before-restore.db';
+  static const _beforeJoin = 'before-join.db';
 
   File _fileFor(DateTime day) => File(p.join(dir.path, 'productivity-${dateKey(day)}.db'));
 
-  /// The copy saved before the last restore first, then newest day first.
+  /// The copies saved before the last restore and before joining sync
+  /// first, then newest day first.
   List<Backup> list() {
     if (!dir.existsSync()) return [];
     final daily = <Backup>[];
-    Backup? before;
+    Backup? before, beforeJoin;
     for (final f in dir.listSync().whereType<File>()) {
       final name = p.basename(f.path);
       final m = _daily.firstMatch(name);
@@ -44,10 +51,12 @@ class Backups {
         daily.add(Backup(f, DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!))));
       } else if (name == _beforeRestore) {
         before = Backup(f, null);
+      } else if (name == _beforeJoin) {
+        beforeJoin = Backup(f, null, isBeforeJoin: true);
       }
     }
     daily.sort((a, b) => b.day!.compareTo(a.day!));
-    return [?before, ...daily];
+    return [?before, ?beforeJoin, ...daily];
   }
 
   /// Saves today's copy if there isn't one yet, then drops the oldest.
@@ -56,9 +65,16 @@ class Backups {
     if (file.existsSync()) return;
     dir.createSync(recursive: true);
     store.saveCopy(file.path);
-    for (final old in list().where((b) => !b.isBeforeRestore).skip(keep)) {
+    for (final old in list().where((b) => b.day != null).skip(keep)) {
       old.file.deleteSync();
     }
+  }
+
+  /// Saves everything as it is now, before joining sync replaces it with
+  /// another computer's data. Only the latest is kept.
+  void beforeJoining(Store store) {
+    dir.createSync(recursive: true);
+    store.saveCopy(p.join(dir.path, _beforeJoin));
   }
 
   /// Replaces the database with [backup], keeping what was there as the

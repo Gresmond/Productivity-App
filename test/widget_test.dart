@@ -281,18 +281,60 @@ void main() {
       expect(state.journalOf(day), 'Line one\n\nLine two');
       expect(store.journal('2026-10-23'), 'Line one\n\nLine two', reason: 'kept in the database for backups');
 
-      // Edited outside the app: the file wins.
+      // The files are a copy: edits to them aren't read back, and the
+      // next save replaces them.
       file.writeAsStringSync('# Friday 23 October 2026\n\nEdited in a text editor\n');
-      expect(state.journalOf(day), 'Edited in a text editor');
+      expect(state.journalOf(day), 'Line one\n\nLine two');
 
-      // A deleted file stays deleted.
+      // A deleted file stays deleted, but the entry is still there.
       old.deleteSync();
       state = AppState(store, journalFiles: files, clock: () => day);
       expect(old.existsSync(), isFalse);
-      expect(state.journalOf(DateTime(2026, 10, 1)), '');
+      expect(state.journalOf(DateTime(2026, 10, 1)), 'Written before files.');
 
       state.setJournal(day, '  ');
       expect(file.existsSync(), isFalse, reason: 'an emptied entry leaves no file');
+      store.close();
+    });
+
+    test("files that can't be saved don't lose the entry, and say why", () {
+      final store = Store.open('${dir.path}/app.db');
+      // A file where the year's folder should be: nothing can go in it.
+      final blocked = File('${dir.path}/Eclipse Journal/2026')..createSync(recursive: true);
+      final day = DateTime(2026, 10, 23);
+      final state = AppState(
+        store,
+        journalFiles: JournalFiles(Directory('${dir.path}/Eclipse Journal')),
+        clock: () => day,
+      );
+
+      state.setJournal(day, 'Still kept');
+      expect(state.journalOf(day), 'Still kept');
+      expect(state.journalFileProblem, contains("couldn't be saved"));
+
+      blocked.deleteSync();
+      state.setJournal(day, 'Kept, and saved');
+      expect(state.journalFileProblem, isNull);
+      expect(File('${dir.path}/Eclipse Journal/2026/2026-10-23.md').readAsStringSync(), contains('Kept, and saved'));
+      store.close();
+    });
+
+    test('restoring a backup brings the files in line with it', () async {
+      final store = Store.open('${dir.path}/app.db');
+      final files = JournalFiles(Directory('${dir.path}/Eclipse Journal'));
+      final backups = Backups(Directory('${dir.path}/backups'));
+      var now = DateTime(2026, 10, 22);
+      final state = AppState(store, journalFiles: files, backups: backups, clock: () => now);
+      state.setJournal(now, 'The 22nd, as first written');
+
+      now = DateTime(2026, 10, 23);
+      state.checkDate(); // the 23rd's copy has the 22nd's entry
+      state.setJournal(DateTime(2026, 10, 22), 'The 22nd, rewritten');
+      state.setJournal(now, 'The 23rd');
+
+      await state.restore(backups.list().firstWhere((b) => b.day == now));
+      expect(files.fileFor(DateTime(2026, 10, 22)).readAsStringSync(), contains('The 22nd, as first written'));
+      expect(files.has(now), isFalse, reason: 'the copy has nothing for the 23rd');
       store.close();
     });
   });
@@ -390,7 +432,10 @@ void main() {
     expect(data.root.path, drive.path);
     expect(File(data.database).existsSync(), isTrue);
     expect(data.backups.listSync(), isNotEmpty);
-    expect(JournalFiles(data.journal).read(DateTime(2026, 10, 24)), 'Written before the move.');
+    expect(
+      JournalFiles(data.journal).fileFor(DateTime(2026, 10, 24)).readAsStringSync(),
+      contains('Written before the move.'),
+    );
     final moved = Store.open(data.database);
     expect(moved.journal('2026-10-24'), 'Written before the move.');
 

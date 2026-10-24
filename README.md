@@ -8,10 +8,10 @@ A desktop habit tracker and to-do planner, built with Flutter.
   light, switching to the dark partner while it's on; on a Mac it follows
   Dark mode instead (set Appearance to Auto to have that change at sunset). Everything is stored locally in SQLite
   (`~/.local/share/dev.nicholas.productivity_app/productivity.db` on Linux).
-- The journal is saved as one Markdown file per day in
-  `~/Documents/Eclipse Journal/<year>/`, readable without the app. (The
-  database keeps a copy for backups, but restoring a backup leaves these
-  files alone.)
+- The journal is also saved as one Markdown file per day in
+  `~/Documents/Eclipse Journal/<year>/`, readable without the app. These
+  are a copy: the database holds the journal, and edits made to the files
+  themselves aren't read back.
 
 ## Installing on a Mac
 

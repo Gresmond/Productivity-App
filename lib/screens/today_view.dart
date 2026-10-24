@@ -533,7 +533,9 @@ class _JournalCard extends StatelessWidget {
         children: [
           TileHeader(
             title: 'Journal',
-            trailing: state.journalFiles == null ? null : _OpenFolderButton(state.journalFiles!.fileFor(day)),
+            trailing: state.journalFiles == null
+                ? null
+                : _OpenFolderButton(state.journalFiles!.fileFor(day), problem: state.journalFileProblem),
           ),
           const SizedBox(height: 6),
           Expanded(
@@ -625,9 +627,12 @@ class _JournalTextState extends State<_JournalText> {
 /// file selected once it exists. Each day is a Markdown file there, so
 /// entries can be read and kept without the app.
 class _OpenFolderButton extends StatelessWidget {
-  const _OpenFolderButton(this.file);
+  const _OpenFolderButton(this.file, {this.problem});
 
   final File file;
+
+  /// Why the files aren't being saved; null while they are.
+  final String? problem;
 
   Future<void> _open() async {
     final folder = file.parent;
@@ -647,13 +652,15 @@ class _OpenFolderButton extends StatelessWidget {
     final home = Platform.environment['HOME'];
     final shown = home != null && file.path.startsWith(home) ? '~${file.path.substring(home.length)}' : file.path;
     return Tooltip(
-      message: 'Saved as $shown\nClick to show it in its folder',
+      message: problem == null
+          ? 'Saved as $shown\nClick to show it in its folder'
+          : '$problem\nYour journal is still kept safe in Eclipse.',
       child: IconButton(
         // Small enough not to make this card's header taller than the others.
         constraints: BoxConstraints.tight(const Size.square(24)),
         padding: EdgeInsets.zero,
         iconSize: 16,
-        color: p.inkMuted.withValues(alpha: 0.8),
+        color: (problem == null ? p.inkMuted : p.missed).withValues(alpha: 0.8),
         onPressed: _open,
         icon: const Icon(Icons.folder_open_rounded),
       ),

@@ -21,7 +21,7 @@ class BackupsDialog extends StatefulWidget {
 }
 
 class _BackupsDialogState extends State<BackupsDialog> {
-  late final List<Backup> _backups = AppScope.of(context).backups?.list() ?? [];
+  late List<Backup> _backups = AppScope.of(context).backups?.list() ?? [];
   Backup? _confirming;
   bool _restoring = false;
   String? _error;
@@ -76,7 +76,12 @@ class _BackupsDialogState extends State<BackupsDialog> {
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
-    if (mounted) setState(() => _signingIn = false);
+    if (!mounted) return;
+    setState(() {
+      _signingIn = false;
+      // Shows the copy saved before joining, even if the join stopped later.
+      _backups = AppScope.of(context).backups?.list() ?? [];
+    });
   }
 
   /// A folder picked to keep everything in, waiting for a yes.
@@ -337,7 +342,7 @@ extension on _BackupsDialogState {
       body = [
         Text(
           'The Drive of ${account.email} already has Eclipse data from another computer. Replace everything on '
-          'this computer with it? This computer\'s data stays in today\'s backup above.',
+          'this computer with it? A copy of what\'s here now is saved first, as Before joining sync above.',
           style: small.copyWith(color: p.ink),
         ),
         const SizedBox(height: 8),
@@ -506,10 +511,13 @@ class _BackupRow extends StatelessWidget {
   }
 
   static (String, String) _describe(Backup b, DateTime today) {
-    if (b.isBeforeRestore) {
+    if (b.day == null) {
       final t = b.modified;
       final time = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-      return ('Before your last restore', 'Saved ${t.day} ${monthNames[t.month - 1]}, $time');
+      return (
+        b.isBeforeJoin ? 'Before joining sync' : 'Before your last restore',
+        'Saved ${t.day} ${monthNames[t.month - 1]}, $time',
+      );
     }
     final d = b.day!;
     final year = d.year == today.year ? '' : ' ${d.year}';
