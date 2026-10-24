@@ -1100,14 +1100,14 @@ class _DayHeader extends StatelessWidget {
             builder: (context, t, _) {
               final letterFg = Color.lerp(weekend ? p.other : p.inkMuted, p.inkMuted.withValues(alpha: 0.6), r)!;
               final numberFg = Color.lerp(p.ink, p.inkMuted.withValues(alpha: 0.75), r)!;
-              // Inside a rest band the marker keeps the band's 4px margin
-              // on every side, and its corners follow the band's.
+              // Inset as it sits inside a rest band, 4px from the band on
+              // every side with corners following the band's, on every day.
               return Container(
                 width: double.infinity,
-                margin: EdgeInsets.symmetric(horizontal: 2 + 3 * r),
+                margin: const EdgeInsets.symmetric(horizontal: 5),
                 padding: const EdgeInsets.symmetric(vertical: 7),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10 - 2 * r),
+                  borderRadius: BorderRadius.circular(8),
                   color: p.today.withValues(alpha: t),
                   boxShadow: [
                     BoxShadow(
