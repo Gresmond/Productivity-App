@@ -760,10 +760,10 @@ class _AppearanceMenu extends StatelessWidget {
         if (state.nightLightAvailable) ...[
           const FadeMenuDivider(),
           SettingSwitchRow(
-            title: Platform.isMacOS ? 'Follow Dark mode' : 'Follow night light',
+            title: Platform.isMacOS ? 'Follow Dark mode' : 'Follow the sun',
             subtitle: Platform.isMacOS
                 ? 'Its dark partner while macOS is in Dark mode.'
-                : 'Its dark partner while night light is on.',
+                : 'Switch to your theme's dark partner when the sun goes down.',
             on: state.followNightLight,
             onTap: () => state.setFollowNightLight(!state.followNightLight),
           ),
