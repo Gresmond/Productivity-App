@@ -286,7 +286,7 @@ class _BackupRow extends StatelessWidget {
           if (restoring)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: p.accent)),
+              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: p.done)),
             )
           else if (confirming) ...[
             TextButton(
