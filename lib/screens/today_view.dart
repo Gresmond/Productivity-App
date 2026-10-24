@@ -12,6 +12,7 @@ import '../widgets/progress_ring.dart';
 import '../widgets/status_cell.dart';
 import '../widgets/tile.dart';
 import '../widgets/todo_panel.dart';
+import '../widgets/welcome_tour.dart';
 
 /// Three columns that exactly fill the window: rituals over the sleep
 /// schedule, today's to-dos, and week / month / journal. Only a card whose list outgrows it scrolls.
@@ -37,18 +38,30 @@ class TodayView extends StatelessWidget {
           children: [
             const Expanded(flex: 11, child: _HabitColumn()),
             const SizedBox(width: _gap),
-            Expanded(flex: 9, child: TodoPanel(scope: TodoScope.today, day: past ? day : null)),
+            Expanded(
+              flex: 9,
+              child: TourTarget(
+                spot: TourSpot.todayTodos,
+                child: TodoPanel(scope: TodoScope.today, day: past ? day : null),
+              ),
+            ),
             const SizedBox(width: _gap),
             Expanded(
               flex: 9,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: TodoPanel(scope: TodoScope.week, day: past ? day : null)),
+                  Expanded(
+                    child: TourTarget(spot: TourSpot.laterTodos, child: TodoPanel(scope: TodoScope.week, day: past ? day : null)),
+                  ),
                   const SizedBox(height: _gap),
-                  Expanded(child: TodoPanel(scope: TodoScope.month, day: past ? day : null)),
+                  Expanded(
+                    child: TourTarget(spot: TourSpot.laterTodos, child: TodoPanel(scope: TodoScope.month, day: past ? day : null)),
+                  ),
                   const SizedBox(height: _gap),
-                  Expanded(child: _JournalCard(key: ValueKey((dateKey(day), state.restores)))),
+                  Expanded(
+                    child: TourTarget(spot: TourSpot.journal, child: _JournalCard(key: ValueKey((dateKey(day), state.restores)))),
+                  ),
                 ],
               ),
             ),
@@ -95,12 +108,18 @@ class _HabitColumn extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: _HabitsCard(title: 'Daily rituals', habits: rituals, allDone: 'Every ritual done. Beautiful.'),
+              child: TourTarget(
+                spot: TourSpot.rituals,
+                child: _HabitsCard(title: 'Daily rituals', habits: rituals, allDone: 'Every ritual done. Beautiful.'),
+              ),
             ),
             const SizedBox(height: TodayView._gap),
             SizedBox(
               height: sleepHeight,
-              child: _HabitsCard(title: 'Sleep schedule', habits: sleep, allDone: 'Schedule kept. Sleep well.'),
+              child: TourTarget(
+                spot: TourSpot.sleep,
+                child: _HabitsCard(title: 'Sleep schedule', habits: sleep, allDone: 'Schedule kept. Sleep well.'),
+              ),
             ),
           ],
         );

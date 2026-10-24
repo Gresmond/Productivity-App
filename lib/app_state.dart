@@ -23,13 +23,31 @@ class AppState extends ChangeNotifier {
     today = dayOf(_clock(), dayStartHour);
     lateNight = dateOnly(_clock()) != today;
     viewYear = today.year;
-    if (store.isEmpty) _seed();
+    firstRun = store.isEmpty;
+    if (firstRun) _seed();
     _backUp();
     _exportJournal();
     _load();
   }
 
   final Store store;
+
+  /// The store was empty: a new install, or a new, empty data folder.
+  late final bool firstRun;
+
+  /// The welcome tour is showing.
+  bool touring = false;
+
+  /// Opens the welcome tour, on the Today view it walks through.
+  void startTour() {
+    touring = true;
+    showToday();
+  }
+
+  void endTour() {
+    touring = false;
+    notifyListeners();
+  }
 
   /// Null where nothing should be written to disk (tests).
   final Backups? backups;

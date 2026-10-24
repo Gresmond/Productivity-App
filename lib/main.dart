@@ -33,6 +33,7 @@ Future<void> main() async {
     restart: () => _restart(state),
   );
 
+  if (state.firstRun) state.startTour();
   _watchDate(state);
   _watchNightLight(state);
 

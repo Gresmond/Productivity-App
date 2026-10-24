@@ -1297,6 +1297,48 @@ void main() {
     expect(find.text('2025'), findsWidgets);
   });
 
+  testWidgets('the welcome tour walks round, and opens again from the appearance menu', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    expect(state.firstRun, isTrue);
+    expect(AppState(state.store).firstRun, isFalse, reason: 'only an empty store is a first run');
+    state.showMonth(3);
+    state.startTour();
+    expect(state.viewMonth, isNull, reason: 'the tour walks the Today view');
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Eclipse!'), findsOneWidget);
+    await _shoot(tester, 'tour_0');
+    await tester.tap(find.text('Show me around'));
+    await tester.pumpAndSettle();
+    expect(find.text('Daily rituals'), findsWidgets);
+    // The app underneath waits while the tour is up.
+    await tester.tap(find.text('Jan').first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(state.viewMonth, isNull);
+    for (var i = 1; i < 9; i++) {
+      await _shoot(tester, 'tour_$i');
+      await tester.tap(find.text(i == 8 ? 'Get started' : 'Next'));
+      await tester.pumpAndSettle();
+    }
+    expect(state.touring, isFalse);
+    expect(find.text('Get started'), findsNothing);
+
+    await tester.tap(find.byTooltip('Appearance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show the welcome tour'));
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome to Eclipse!'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(state.touring, isFalse);
+  });
+
   testWidgets('theme switcher, and every theme renders', (tester) async {
     await _loadFonts();
     tester.view.physicalSize = const Size(1440, 900);

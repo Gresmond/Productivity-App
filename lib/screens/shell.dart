@@ -11,6 +11,7 @@ import '../widgets/backups_dialog.dart';
 import '../widgets/fade_menu.dart';
 import '../widgets/fade_through.dart';
 import '../widgets/update_banner.dart';
+import '../widgets/welcome_tour.dart';
 import 'month_view.dart';
 import 'today_view.dart';
 import 'year_view.dart';
@@ -48,14 +49,13 @@ class Shell extends StatelessWidget {
     );
 
     return Scaffold(
-      body: updater == null
-          ? page
-          : Stack(
-              children: [
-                Positioned.fill(child: page),
-                Positioned(right: 32, bottom: 28, child: UpdateBanner(updater: updater)),
-              ],
-            ),
+      body: Stack(
+        children: [
+          Positioned.fill(child: page),
+          if (updater != null) Positioned(right: 32, bottom: 28, child: UpdateBanner(updater: updater)),
+          if (state.touring) const Positioned.fill(child: WelcomeTour()),
+        ],
+      ),
     );
   }
 }
@@ -131,7 +131,10 @@ class _Header extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     // On the Today view the date opens a calendar of past days.
-                    if (month == null && !state.viewingYear) _DateButton(title: title, style: titleStyle) else Text(title, style: titleStyle),
+                    if (month == null && !state.viewingYear)
+                      TourTarget(spot: TourSpot.date, child: _DateButton(title: title, style: titleStyle))
+                    else
+                      Text(title, style: titleStyle),
                   ],
                 ),
               ),
@@ -143,39 +146,42 @@ class _Header extends StatelessWidget {
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: p.tile.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
-                      blurRadius: 18,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(26),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    child: _TabBar(
-                      selected: state.viewingYear ? 13 : month ?? 0,
-                      tabs: [
-                        _Tab(label: 'Today', selected: month == null && !state.viewingYear, onTap: state.showToday),
-                        for (var m = 1; m <= 12; m++)
-                          _Tab(
-                            label: monthNames[m - 1].substring(0, 3),
-                            selected: month == m,
-                            isCurrent: state.viewYear == today.year && m == today.month,
-                            future: DateTime(state.viewYear, m).isAfter(today),
-                            onTap: () => state.showMonth(m),
-                          ),
-                        _Tab(label: 'Year', selected: state.viewingYear, onTap: state.showYear),
-                      ],
+              child: TourTarget(
+                spot: TourSpot.tabs,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: p.tile.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
+                        blurRadius: 18,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      child: _TabBar(
+                        selected: state.viewingYear ? 13 : month ?? 0,
+                        tabs: [
+                          _Tab(label: 'Today', selected: month == null && !state.viewingYear, onTap: state.showToday),
+                          for (var m = 1; m <= 12; m++)
+                            _Tab(
+                              label: monthNames[m - 1].substring(0, 3),
+                              selected: month == m,
+                              isCurrent: state.viewYear == today.year && m == today.month,
+                              future: DateTime(state.viewYear, m).isAfter(today),
+                              onTap: () => state.showMonth(m),
+                            ),
+                          _Tab(label: 'Year', selected: state.viewingYear, onTap: state.showYear),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -187,7 +193,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 10),
           const _BackupsButton(),
           const SizedBox(width: 10),
-          const _ThemeButton(),
+          const TourTarget(spot: TourSpot.appearance, child: _ThemeButton()),
         ],
       ),
     );
@@ -788,6 +794,25 @@ class _AppearanceMenu extends StatelessWidget {
         ),
         const FadeMenuDivider(),
         const _DayStartEntry(),
+        const FadeMenuDivider(),
+        FadeMenuRow(
+          height: 50,
+          onTap: () {
+            Navigator.pop(context);
+            state.startTour();
+          },
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Show the welcome tour',
+                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
+                ),
+              ),
+              Icon(Icons.arrow_forward_rounded, size: 18, color: p.inkMuted),
+            ],
+          ),
+        ),
       ],
     );
   }
