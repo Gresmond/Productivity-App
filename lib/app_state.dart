@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 
 import 'data/backups.dart';
+import 'data/data_folder.dart';
 import 'data/journal_files.dart';
 import 'data/store.dart';
 import 'models.dart';
@@ -9,7 +12,14 @@ import 'theme/app_theme.dart';
 /// App state backed by [Store]. Keeps habit entries and the current to-do
 /// lists in memory and writes every change straight to SQLite.
 class AppState extends ChangeNotifier {
-  AppState(this.store, {this.backups, this.journalFiles, DateTime Function()? clock}) : _clock = clock ?? DateTime.now {
+  AppState(
+    this.store, {
+    this.backups,
+    this.journalFiles,
+    this.dataFolder,
+    this.restart,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now {
     today = dayOf(_clock(), dayStartHour);
     lateNight = dateOnly(_clock()) != today;
     viewYear = today.year;
@@ -27,6 +37,19 @@ class AppState extends ChangeNotifier {
   /// Where the journal lives as documents; null keeps it in the database
   /// only (tests).
   final JournalFiles? journalFiles;
+
+  /// Where everything is kept; null in tests.
+  final DataFolder? dataFolder;
+
+  /// Reopens the app; null in tests.
+  final Future<void> Function()? restart;
+
+  /// Keeps everything in [folder] from now on, copying it there unless the
+  /// folder already has data, then reopens the app on it.
+  Future<void> useDataFolder(Directory folder) async {
+    dataFolder!.moveTo(folder, store);
+    await restart?.call();
+  }
   final DateTime Function() _clock;
 
   /// The day ticks, to-dos and the journal count towards: the calendar

@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:eclipse/app_state.dart';
 import 'package:eclipse/data/backups.dart';
+import 'package:eclipse/data/data_folder.dart';
 import 'package:eclipse/data/journal_files.dart';
 import 'package:eclipse/data/night_light.dart';
 import 'package:eclipse/data/store.dart';
@@ -42,8 +43,7 @@ Future<void> _loadFonts() async {
     '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
   );
   if (icons.existsSync()) {
-    final loader = FontLoader('MaterialIcons')
-      ..addFont(Future.value(ByteData.sublistView(icons.readAsBytesSync())));
+    final loader = FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(icons.readAsBytesSync())));
     await loader.load();
   }
 }
@@ -120,8 +120,12 @@ void main() {
 
     test('every theme has a partner of the other brightness', () {
       expect(palettes.map((p) => p.name), [
-        'Solar Eclipse', 'Lunar Eclipse', 'Morning Pastel', 'Evening Pastel',
-        'Sunrise', 'Sunset',
+        'Solar Eclipse',
+        'Lunar Eclipse',
+        'Morning Pastel',
+        'Evening Pastel',
+        'Sunrise',
+        'Sunset',
       ]);
       for (final p in palettes) {
         expect(partnerOf(p.name, dark: true).brightness, Brightness.dark);
@@ -153,8 +157,11 @@ void main() {
         }
         // Done and missed stay apart for every kind of colour blindness.
         for (final type in ColourBlindness.values) {
-          expect(deltaE(simulate(p.done, type), simulate(p.missed, type)), greaterThanOrEqualTo(0.08),
-              reason: '${p.name} done vs missed, ${type.name}');
+          expect(
+            deltaE(simulate(p.done, type), simulate(p.missed, type)),
+            greaterThanOrEqualTo(0.08),
+            reason: '${p.name} done vs missed, ${type.name}',
+          );
         }
       }
     });
@@ -263,13 +270,18 @@ void main() {
     test('offers newer commits from the folder the app was built from', () async {
       git(['init', '-q']);
       Directory('${dir.path}/linux').createSync();
-      File('${dir.path}/linux/install.sh').writeAsStringSync('echo "Building"\necho "Error: no space left" >&2\nexit 1\n');
+      File('${dir.path}/linux/install.sh')
+          .writeAsStringSync('echo "Building"\necho "Error: no space left" >&2\nexit 1\n');
       git(['add', '-A']);
       git(['commit', '-qm', 'First']);
       final built = git(['rev-parse', 'HEAD']);
 
       final app = Directory('${dir.path}/installed')..createSync();
-      expect(Updater.forExecutable('${app.path}/eclipse'), isNull, reason: 'no build-info: not installed by the script');
+      expect(
+        Updater.forExecutable('${app.path}/eclipse'),
+        isNull,
+        reason: 'no build-info: not installed by the script',
+      );
       File('${app.path}/build-info').writeAsStringSync('repo=${dir.path}\ncommit=$built\n');
       final updater = Updater.forExecutable('${app.path}/eclipse')!;
 
@@ -296,6 +308,48 @@ void main() {
       await updater.check();
       expect(updater.status, UpdateStatus.failed, reason: 'the error stays until there is something new');
     });
+  });
+
+  test('moving to a data folder copies everything there and uses it next time', () {
+    final tmp = Directory.systemTemp.createTempSync('productivity_folder');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final home = Directory('${tmp.path}/home')..createSync();
+    final docs = Directory('${tmp.path}/docs')..createSync();
+
+    var data = DataFolder.load(home, docs);
+    expect(data.chosen, isNull);
+    expect(data.journal.path, '${docs.path}/Eclipse Journal');
+    final store = Store.open(data.database);
+    final state = AppState(
+      store,
+      backups: Backups(data.backups),
+      journalFiles: JournalFiles(data.journal),
+      clock: () => DateTime(2026, 10, 24),
+    );
+    state.setJournal(DateTime(2026, 10, 24), 'Written before the move.');
+
+    final drive = Directory('${tmp.path}/Google Drive/Eclipse');
+    data.moveTo(drive, store);
+    store.close();
+
+    data = DataFolder.load(home, docs);
+    expect(data.root.path, drive.path);
+    expect(File(data.database).existsSync(), isTrue);
+    expect(data.backups.listSync(), isNotEmpty);
+    expect(JournalFiles(data.journal).read(DateTime(2026, 10, 24)), 'Written before the move.');
+    final moved = Store.open(data.database);
+    expect(moved.journal('2026-10-24'), 'Written before the move.');
+
+    // A second computer pointing at the same folder uses what's there.
+    final other = DataFolder.load(Directory('${tmp.path}/home2')..createSync(), docs);
+    final fresh = Store.memory();
+    other.moveTo(drive, fresh);
+    expect(
+      Store.open(DataFolder.load(Directory('${tmp.path}/home2'), docs).database).journal('2026-10-24'),
+      'Written before the move.',
+      reason: 'not overwritten',
+    );
+    moved.close();
   });
 
   group('carry-forward', () {
@@ -562,7 +616,11 @@ void main() {
     state.setSleepNote(2026, 8, state.sleepHabitsFor(2026, 8).first, 'Summer hours');
     expect(note(9), '(name)');
     expect(note(10), 'Up by 8 am');
-    expect(state.sleepHabitsFor(2026, 10)[1].description, startsWith('Complete daily tasks'), reason: 'others untouched');
+    expect(
+      state.sleepHabitsFor(2026, 10)[1].description,
+      startsWith('Complete daily tasks'),
+      reason: 'others untouched',
+    );
   });
 
   group('ritual notes', () {
@@ -737,7 +795,12 @@ void main() {
     var now = DateTime(2026, 10, 20);
     late AppState state;
     await tester.runAsync(() async {
-      state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => now);
+      state = AppState(
+        Store.open('${dir.path}/app.db'),
+        backups: backups,
+        dataFolder: DataFolder.load(dir, dir),
+        clock: () => now,
+      );
       for (var d = 21; d <= 23; d++) {
         now = DateTime(2026, 10, d);
         state.checkDate();
@@ -811,7 +874,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('31'), findsNWidgets(2), reason: 'rituals and sleep schedule each have the days');
     expect(find.text('SLEEP SCHEDULE  ·  4'), findsOneWidget);
-    expect(find.text('0%'), findsOneWidget, reason: 'the sleep schedule shows its percentage before anything is marked');
+    expect(
+      find.text('0%'),
+      findsOneWidget,
+      reason: 'the sleep schedule shows its percentage before anything is marked',
+    );
     await _shoot(tester, 'month');
 
     await tester.tap(find.text('Edit rituals'));
@@ -937,7 +1004,11 @@ void main() {
         final a = from.evaluate().isEmpty ? 0.0 : opacityOf(from.first);
         final b = to.evaluate().isEmpty ? 0.0 : opacityOf(to.last); // the incoming child is built last
         expect(a < 0.05 || b < 0.05, isTrue, reason: '$name frame $i: $a and $b');
-        expect(lastA - a < 0.25 && b - lastB < 0.25, isTrue, reason: '$name frame $i jumps: $lastA -> $a, $lastB -> $b');
+        expect(
+          lastA - a < 0.25 && b - lastB < 0.25,
+          isTrue,
+          reason: '$name frame $i jumps: $lastA -> $a, $lastB -> $b',
+        );
         (lastA, lastB) = (a, b);
         if (i == 5 || i == 12) await _shoot(tester, '${name}_$i');
       }
@@ -1113,10 +1184,14 @@ void main() {
     await tester.pumpWidget(EclipseApp(state: state, updater: updater));
     await tester.pumpAndSettle();
     expect(find.text('A new version is ready'), findsOneWidget, reason: 'built but hidden');
-    expect(tester.widget<AnimatedOpacity>(find.ancestor(
-      of: find.text('A new version is ready'),
-      matching: find.byType(AnimatedOpacity),
-    ).first).opacity, 0);
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.ancestor(of: find.text('A new version is ready'), matching: find.byType(AnimatedOpacity)).first,
+          )
+          .opacity,
+      0,
+    );
 
     updater
       ..newCommits = 3

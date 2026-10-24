@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_state.dart';
 import 'data/backups.dart';
+import 'data/data_folder.dart';
 import 'data/journal_files.dart';
 import 'data/night_light.dart';
 import 'data/store.dart';
@@ -19,15 +19,18 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemTimeZone.instance?.sync();
-  // ~/.local/share/dev.nicholas.productivity_app/productivity.db
+  // ~/.local/share/dev.nicholas.productivity_app, unless you chose a folder.
   final dir = await getApplicationSupportDirectory();
   await dir.create(recursive: true);
-  final state = AppState(
-    Store.open(p.join(dir.path, 'productivity.db')),
-    // ~/.local/share/dev.nicholas.productivity_app/backups/
-    backups: Backups(Directory(p.join(dir.path, 'backups'))),
-    // ~/Documents/Eclipse Journal/
-    journalFiles: JournalFiles(Directory(p.join((await getApplicationDocumentsDirectory()).path, 'Eclipse Journal'))),
+  final data = DataFolder.load(dir, await getApplicationDocumentsDirectory());
+  await data.root.create(recursive: true);
+  late final AppState state;
+  state = AppState(
+    Store.open(data.database),
+    backups: Backups(data.backups),
+    journalFiles: JournalFiles(data.journal),
+    dataFolder: data,
+    restart: () => _restart(state),
   );
 
   _watchDate(state);
@@ -41,6 +44,18 @@ Future<void> main() async {
   }
 
   runApp(EclipseApp(state: state, updater: updater));
+}
+
+/// Reopens the app, with whatever data folder is now chosen.
+Future<void> _restart(AppState state) async {
+  state.store.close();
+  // Only one copy runs at a time, so the new one waits for this one to exit.
+  await Process.start('sh', [
+    '-c',
+    'while kill -0 $pid 2>/dev/null; do sleep 0.1; done; exec "\$0"',
+    Platform.resolvedExecutable,
+  ], mode: ProcessStartMode.detached);
+  exit(0);
 }
 
 /// Rolls the day over on the stroke of midnight (or whenever the user's day
