@@ -120,12 +120,14 @@ void main() {
 
     test('every theme has a partner of the other brightness', () {
       expect(palettes.map((p) => p.name), [
-        'Solar Eclipse',
-        'Lunar Eclipse',
-        'Morning Pastel',
-        'Evening Pastel',
         'Sunrise',
         'Sunset',
+        'Orchard Dawn',
+        'Orchard Dusk',
+        'Morning Pastel',
+        'Evening Pastel',
+        'Solar Eclipse',
+        'Lunar Eclipse',
       ]);
       for (final p in palettes) {
         expect(partnerOf(p.name, dark: true).brightness, Brightness.dark);
@@ -133,6 +135,7 @@ void main() {
       }
       expect(partnerOf('Sunrise', dark: true).name, 'Sunset');
       expect(partnerOf('Evening Pastel', dark: false).name, 'Morning Pastel');
+      expect(partnerOf('Orchard Dawn', dark: true).name, 'Orchard Dusk');
     });
 
     test('OKLCH round-trips, and keeps out-of-gamut colours in sRGB', () {

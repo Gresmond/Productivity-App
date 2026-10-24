@@ -185,11 +185,40 @@ final sunsetPalette = const PaletteRecipe(
   softness: 0.5,
 ).build();
 
+final orchardDawnPalette = const PaletteRecipe(
+  name: 'Orchard Dawn',
+  brightness: Brightness.light,
+  // Faint cream yellow.
+  neutralHue: 100,
+  neutralChroma: 0.02,
+  // Pastel apples: green done, orange other, red missed.
+  keyHue: 135,
+  statusChroma: 0.095,
+  statusLightness: 0.78,
+  harmony: Harmony.orchard,
+).build();
+
+final orchardDuskPalette = const PaletteRecipe(
+  name: 'Orchard Dusk',
+  brightness: Brightness.dark,
+  // A coral late sunset, just short of the orange apple's hue, and
+  // lighter than the other night themes.
+  neutralHue: 45,
+  neutralChroma: 0.10,
+  surfaceLift: 0.17,
+  // Pastel apples: green done, orange other, red missed.
+  keyHue: 135,
+  statusChroma: 0.095,
+  statusLightness: 0.78,
+  harmony: Harmony.orchard,
+).build();
+
 /// Each light theme and its dark partner, in menu order.
 final palettePairs = [
-  (solarEclipsePalette, lunarEclipsePalette),
-  (morningPastelPalette, eveningPastelPalette),
   (sunrisePalette, sunsetPalette),
+  (orchardDawnPalette, orchardDuskPalette),
+  (morningPastelPalette, eveningPastelPalette),
+  (solarEclipsePalette, lunarEclipsePalette),
 ];
 
 final palettes = [for (final (light, dark) in palettePairs) ...[light, dark]];

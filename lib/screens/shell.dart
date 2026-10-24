@@ -754,7 +754,7 @@ class _AppearanceMenu extends StatelessWidget {
                     ),
                   ),
                 ),
-                for (final c in [option.done, option.missed, option.other])
+                for (final c in [option.done, option.missed, option.other, option.today])
                   Container(
                     width: 8,
                     height: 8,

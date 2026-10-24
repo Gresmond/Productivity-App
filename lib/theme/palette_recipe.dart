@@ -20,7 +20,12 @@ enum Harmony {
 
   /// Neighbours along a fifth of the wheel, in the order a sky fades at
   /// dusk: orange, then crimson, then magenta, and today the violet after.
-  sky(-40, -75, -110);
+  sky(-40, -75, -110),
+
+  /// An apple orchard: from a green apple round to an orange and a red
+  /// one, on the same 35° steps as [sky] once past the orange, and today
+  /// the apple-blossom pink one step further.
+  orchard(-75, -110, -145);
 
   const Harmony(this.first, this.second, this.today);
 
@@ -54,6 +59,7 @@ class PaletteRecipe {
     this.lightnessSpread = 0.12,
     this.vivid = false,
     this.softness = 0,
+    this.surfaceLift = 0,
   });
 
   final String name;
@@ -74,6 +80,10 @@ class PaletteRecipe {
   /// pastel, 0-1: lighter, and with less of the chroma they could have.
   final double softness;
 
+  /// How far a dark theme's surfaces sit above the usual night-time ladder,
+  /// in OKLCH lightness: a dusk rather than a midnight.
+  final double surfaceLift;
+
   PaletteRecipe withHarmony(Harmony harmony) => PaletteRecipe(
         name: name,
         brightness: brightness,
@@ -86,6 +96,7 @@ class PaletteRecipe {
         lightnessSpread: lightnessSpread,
         vivid: vivid,
         softness: softness,
+        surfaceLift: surfaceLift,
       );
 
   bool get _dark => brightness == Brightness.dark;
@@ -98,6 +109,9 @@ class PaletteRecipe {
   }
 
   Color _neutral(double l, [double chromaScale = 1]) => Oklch(l, neutralChroma * chromaScale, neutralHue).toColor();
+
+  /// A surface on the dark ladder, raised by [surfaceLift].
+  double _night(double l) => l + surfaceLift;
 
   Palette build() {
     final (doneHue, missedHue, otherHue) = statusHues;
@@ -135,11 +149,12 @@ class PaletteRecipe {
     return Palette(
       name: name,
       brightness: brightness,
-      background: _neutral(_dark ? 0.165 : 0.965),
-      tile: _neutral(_dark ? 0.205 : 0.992, _dark ? 1 : 0.5),
-      tileBorder: _neutral(_dark ? 0.285 : 0.905),
+      background: _neutral(_dark ? _night(0.165) : 0.965),
+      tile: _neutral(_dark ? _night(0.205) : 0.992, _dark ? 1 : 0.5),
+      tileBorder: _neutral(_dark ? _night(0.285) : 0.905),
       ink: ink,
-      inkMuted: _neutral(_dark ? 0.73 : 0.52, 2),
+      // Lifted surfaces need lighter muted text to keep its contrast.
+      inkMuted: _neutral(_dark ? 0.73 + surfaceLift / 2 : 0.52, 2),
       accent: Oklch(accentL, accentC, accentHue).toColor(),
       onAccent: onAccent,
       // Runs from missed through other to done, so it ends on the goal.
@@ -152,7 +167,7 @@ class PaletteRecipe {
       done: done,
       missed: missed,
       other: other,
-      empty: _neutral(_dark ? 0.255 : 0.94),
+      empty: _neutral(_dark ? _night(0.255) : 0.94),
       shadow: _dark ? const Color(0xFF000000) : _neutral(0.35, 4),
     );
   }
