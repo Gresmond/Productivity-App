@@ -190,7 +190,7 @@ class _HabitsCard extends StatelessWidget {
         ? allDone
         : state.isRestDay(day)
         ? 'Rest day. Nothing you have to do.'
-        : '${total - done} still to go today';
+        : '';
 
     return Tile(
       padding: const EdgeInsets.fromLTRB(24, 22, 20, 12),

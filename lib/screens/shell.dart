@@ -611,10 +611,7 @@ class _ThemeButtonState extends State<_ThemeButton> {
 class _DayStartEntry extends PopupMenuEntry<String> {
   const _DayStartEntry();
 
-  static const hours = [0, 2, 3, 4, 5];
-
-  /// Midnight's button is wider, to fit its label.
-  static int flex(int hour) => hour == 0 ? 7 : 4;
+  static const hours = [0, 4];
 
   @override
   double get height => 96;
@@ -630,9 +627,7 @@ class _DayStartEntryState extends State<_DayStartEntry> {
   /// Where the pill sits for [hour]: its left edge and width, as fractions.
   static Offset _pillAt(int hour) {
     const hours = _DayStartEntry.hours;
-    final total = hours.fold(0, (sum, h) => sum + _DayStartEntry.flex(h));
-    final before = hours.takeWhile((h) => h != hour).fold(0, (sum, h) => sum + _DayStartEntry.flex(h));
-    return Offset(before / total, _DayStartEntry.flex(hour) / total);
+    return Offset(hours.indexOf(hour) / hours.length, 1 / hours.length);
   }
 
   @override
@@ -687,7 +682,6 @@ class _DayStartEntryState extends State<_DayStartEntry> {
                   children: [
                     for (final hour in _DayStartEntry.hours)
                       Expanded(
-                        flex: _DayStartEntry.flex(hour),
                         child: MouseRegion(
                           cursor: SystemMouseCursors.click,
                           child: GestureDetector(

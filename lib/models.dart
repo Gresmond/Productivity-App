@@ -59,6 +59,13 @@ class TodoItem {
   int carried;
 }
 
+/// [text] with its first letter upper-case; the rest is left alone.
+String capitaliseFirst(String text) {
+  final i = text.indexOf(RegExp(r'\S'));
+  if (i == -1) return text;
+  return text.substring(0, i) + text[i].toUpperCase() + text.substring(i + 1);
+}
+
 DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
 /// The day [now] counts towards when each day starts at [startHour] o'clock:

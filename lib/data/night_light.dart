@@ -28,7 +28,9 @@ class NightLight {
       socket = await Socket.connect(InternetAddress(socketPath, type: InternetAddressType.unix), 0)
           .timeout(const Duration(seconds: 1));
       socket.write('temperature');
-      final reply = await utf8.decoder.bind(socket).join().timeout(const Duration(seconds: 1));
+      // hyprsunset answers but leaves the connection open, so take the
+      // first reply rather than waiting for it to close.
+      final reply = await utf8.decoder.bind(socket).first.timeout(const Duration(seconds: 1));
       final temperature = int.tryParse(reply.trim());
       return temperature == null ? null : temperature != offTemperature;
     } catch (_) {

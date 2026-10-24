@@ -36,7 +36,7 @@ class AppState extends ChangeNotifier {
   /// Past midnight but before [dayStartHour], so [today] is yesterday's date.
   late bool lateNight;
 
-  /// The hour a new day starts: 0 for midnight, up to 6 for night owls.
+  /// The hour a new day starts: 0 for midnight or 4 for night owls.
   late int dayStartHour = int.tryParse(store.setting('dayStartHour') ?? '') ?? 0;
 
   void setDayStartHour(int hour) {
@@ -424,7 +424,7 @@ class AppState extends ChangeNotifier {
 
   void addTodo(TodoScope scope, String text) {
     if (text.trim().isEmpty) return;
-    todos[scope]!.add(store.addTodo(scope, scope.period(today), text.trim()));
+    todos[scope]!.add(store.addTodo(scope, scope.period(today), capitaliseFirst(text.trim())));
     notifyListeners();
   }
 

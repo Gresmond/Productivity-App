@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 
 import '../app_state.dart';
@@ -160,6 +161,8 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
                   child: TextField(
                     controller: _controller,
                     focusNode: _focus,
+                    textCapitalization: TextCapitalization.sentences,
+                    inputFormatters: const [_CapitaliseFirst()],
                     style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.ink),
                     decoration: InputDecoration(
                       isDense: true,
@@ -177,6 +180,18 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
         ],
       ),
     );
+  }
+}
+
+/// Capitalises the first letter as you type, since a desktop keyboard
+/// ignores [TextCapitalization].
+class _CapitaliseFirst extends TextInputFormatter {
+  const _CapitaliseFirst();
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final text = capitaliseFirst(newValue.text);
+    return text == newValue.text ? newValue : newValue.copyWith(text: text);
   }
 }
 
