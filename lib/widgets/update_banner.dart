@@ -97,7 +97,7 @@ class _Card extends StatelessWidget {
           const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(minHeight: 3, color: p.accent, backgroundColor: p.empty),
+            child: LinearProgressIndicator(minHeight: 3, color: p.done, backgroundColor: p.empty),
           ),
         ],
         if (status == UpdateStatus.available || status == UpdateStatus.failed) ...[

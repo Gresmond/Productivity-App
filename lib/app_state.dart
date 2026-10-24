@@ -572,36 +572,26 @@ class AppState extends ChangeNotifier {
   }
 
   /// First run: the ritual list (the sleep schedule is made with the database), 1 October and the to-dos from the spreadsheet.
+  /// A new install's starting point: a few gentle rituals for this month,
+  /// and to-dos that teach the app by being done.
   void _seed() {
-    const names = [
-      'Clean room',
-      'No phone until breakfast',
-      'Morning walk',
-      'Brush teeth',
-      'Check calendar and alarms',
-      'Weights',
-      'Creatine, min + fin, vit. D, protein powder',
-      'Read',
-    ];
-    const oct1 = [1, 0, 0, 1, 1, 0, 0, 0];
-    for (final (i, name) in names.indexed) {
-      final h = store.addHabit(2026, 10, name);
-      store.setEntry('2026-10-01', h.id, oct1[i] == 1 ? HabitStatus.done : HabitStatus.missed);
+    for (final name in [
+      'Drink water on waking',
+      'Make the bed',
+      'Move for 20 minutes',
+      'Read 10 pages',
+      'Tidy for 10 minutes',
+    ]) {
+      store.addHabit(today.year, today.month, name);
     }
-
-    const sheetTodos = {
-      'Chloe money back and forth': true,
-      'Update spending tracker': true,
-      'Find all sunglasses': true,
-      'Change PC password': true,
-      'Transfer journals': true,
-      'Clean inside of car': true,
-      'Dust room': false,
-      'Vacuum and mop bedroom floor': false,
-      'Work out how to use Google Drive on Linux': true,
-      'Delete screenshots from Google Photos and all local copies': true,
-    };
-    sheetTodos.forEach((text, done) => store.addTodo(TodoScope.today, today, text, done: done));
+    for (final (scope, text) in [
+      (TodoScope.today, 'Tick this off to try it'),
+      (TodoScope.today, 'Add a task of your own'),
+      (TodoScope.week, 'Edit rituals to make them yours'),
+      (TodoScope.month, 'Pick a theme you love'),
+    ]) {
+      store.addTodo(scope, today, text);
+    }
   }
 }
 

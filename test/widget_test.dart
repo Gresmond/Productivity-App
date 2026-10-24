@@ -48,6 +48,31 @@ Future<void> _loadFonts() async {
   }
 }
 
+/// A store holding the rituals of the spreadsheet the app replaced, which
+/// most tests are written against.
+Store _sheet() => _fill(Store.memory());
+
+/// Gives [store] the spreadsheet's rituals, unless it has rituals already.
+Store _fill(Store store) {
+  if (!store.isEmpty) return store;
+  const names = [
+    'Clean room',
+    'No phone until breakfast',
+    'Morning walk',
+    'Brush teeth',
+    'Check calendar and alarms',
+    'Weights',
+    'Creatine, min + fin, vit. D, protein powder',
+    'Read',
+  ];
+  const oct1 = [1, 0, 0, 1, 1, 0, 0, 0];
+  for (final (i, name) in names.indexed) {
+    final h = store.addHabit(2026, 10, name);
+    store.setEntry('2026-10-01', h.id, oct1[i] == 1 ? HabitStatus.done : HabitStatus.missed);
+  }
+  return store;
+}
+
 Future<void> _shoot(WidgetTester tester, String name) async {
   if (_shotDir.isEmpty) return;
   // The root layer, so popups and dialogs in the overlay are included.
@@ -70,7 +95,7 @@ void main() {
       final path = '${dir.path}/test.db';
       final day = DateTime(2026, 10, 23);
 
-      var store = Store.open(path);
+      var store = _fill(Store.open(path));
       var state = AppState(store, clock: () => day);
       final meditate = state.habits.firstWhere((h) => h.name == 'Read');
       state.cycle(day, meditate); // done
@@ -109,7 +134,7 @@ void main() {
         ('Citrus', 'Solar Eclipse'),
         ('Pastel', 'Morning Pastel'),
       ]) {
-        final store = Store.memory()..setSetting('theme', old);
+        final store = _sheet()..setSetting('theme', old);
         expect(AppState(store).themeName, now, reason: old);
         // The new dark Sunset is kept once the names are current.
         store.setSetting('theme', 'Sunset');
@@ -170,7 +195,7 @@ void main() {
     });
 
     test('follows night light, and a manual pick holds until it changes', () {
-      final store = Store.memory();
+      final store = _sheet();
       var state = AppState(store)..setTheme('Morning Pastel');
       state.nightLightIs(true);
       expect(state.themeName, 'Evening Pastel');
@@ -345,7 +370,7 @@ void main() {
 
     // A second computer pointing at the same folder uses what's there.
     final other = DataFolder.load(Directory('${tmp.path}/home2')..createSync(), docs);
-    final fresh = Store.memory();
+    final fresh = _sheet();
     other.moveTo(drive, fresh);
     expect(
       Store.open(DataFolder.load(Directory('${tmp.path}/home2'), docs).database).journal('2026-10-24'),
@@ -358,7 +383,7 @@ void main() {
   group('carry-forward', () {
     test('unfinished to-dos roll into the new day, week and month', () {
       var now = DateTime(2026, 10, 23, 22); // Friday
-      final state = AppState(Store.memory(), clock: () => now);
+      final state = AppState(_sheet(), clock: () => now);
       state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
 
       state.addTodo(TodoScope.today, 'Unfinished');
@@ -385,7 +410,7 @@ void main() {
 
     test('a past day keeps its list as it stood, ticked and unticked', () {
       var now = DateTime(2026, 10, 22, 12); // Thursday
-      final state = AppState(Store.memory(), clock: () => now);
+      final state = AppState(_sheet(), clock: () => now);
       state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
       state.addTodo(TodoScope.today, 'collect prescription');
       state.addTodo(TodoScope.today, 'Finished');
@@ -423,7 +448,7 @@ void main() {
 
     test('nothing vanishes when the clock goes back over midnight', () {
       var now = DateTime(2026, 10, 24, 0, 30); // flew in from further east
-      final state = AppState(Store.memory(), clock: () => now);
+      final state = AppState(_sheet(), clock: () => now);
       state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
       state.addTodo(TodoScope.today, 'Unpack');
 
@@ -450,7 +475,7 @@ void main() {
     });
 
     test('late-night ticks count for the day before', () {
-      final store = Store.memory();
+      final store = _sheet();
       var now = DateTime(2026, 10, 23, 23); // Friday night
       var state = AppState(store, clock: () => now);
       state.setDayStartHour(4);
@@ -478,7 +503,7 @@ void main() {
 
     test('changing it after midnight moves today back, losing nothing', () {
       var now = DateTime(2026, 10, 24, 1); // Saturday, 1am, days start at midnight
-      final state = AppState(Store.memory(), clock: () => now);
+      final state = AppState(_sheet(), clock: () => now);
       state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
       state.addTodo(TodoScope.today, 'Added just after midnight');
 
@@ -496,7 +521,7 @@ void main() {
     // Clocks went forward on 4 October 2026 in Adelaide, making it 23 hours
     // long. Run with TZ=Australia/Adelaide to check stepping over it.
     test('step by calendar day over a clock change', () {
-      final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 6));
+      final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 6));
       final h = state.habits.first;
       for (final d in [3, 5, 6]) {
         state.cycle(DateTime(2026, 10, d), h);
@@ -506,7 +531,7 @@ void main() {
     });
 
     test('a blank weekend is excused only when weekends are rest days', () {
-      final store = Store.memory();
+      final store = _sheet();
       var state = AppState(store, clock: () => DateTime(2026, 10, 27)); // Tuesday
       final h = state.habits.first;
       for (final d in [22, 23, 26, 27]) {
@@ -571,7 +596,7 @@ void main() {
   group('per-month rituals', () {
     test('a new month copies the last one, and edits stay in their month', () {
       var now = DateTime(2026, 10, 31);
-      final state = AppState(Store.memory(), clock: () => now);
+      final state = AppState(_sheet(), clock: () => now);
 
       // Future months preview the latest list without saving it.
       expect(state.habitsFor(2026, 12), hasLength(8));
@@ -603,7 +628,7 @@ void main() {
   });
 
   test('sleep notes belong to their month, and a new month starts with the last', () {
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 24));
     String note(int month) => state.sleepHabitsFor(2026, month).first.description ?? '(name)';
     expect(note(10), 'Awaken at 8:30 am');
 
@@ -632,7 +657,7 @@ void main() {
       addTearDown(() => dir.deleteSync(recursive: true));
       final path = '${dir.path}/app.db';
       var now = DateTime(2026, 10, 31);
-      var state = AppState(Store.open(path), clock: () => now);
+      var state = AppState(_fill(Store.open(path)), clock: () => now);
       final read = state.habits.firstWhere((h) => h.name == 'Read');
       state.setHabitNote(2026, 10, read, '  20 pages before bed ');
       expect(state.habits.firstWhere((h) => h.name == 'Read').description, '20 pages before bed');
@@ -676,7 +701,7 @@ void main() {
 
   group('preview months', () {
     test('months before the first list are saved only when ticked or edited', () {
-      final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+      final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
 
       // Browsing back a year shows October's rituals but saves nothing.
       final preview = state.habitsFor(2025, 10);
@@ -703,7 +728,7 @@ void main() {
     });
 
     test('adding a ritual works in a database with no lists at all', () {
-      final store = Store.memory();
+      final store = _sheet();
       final state = AppState(store, clock: () => DateTime(2026, 10, 23));
       for (final h in state.habits.toList()) {
         state.removeHabit(2026, 10, h);
@@ -722,7 +747,7 @@ void main() {
     test('one copy a day, the newest 30 kept', () {
       final backups = Backups(Directory('${dir.path}/backups'));
       var now = DateTime(2026, 10, 23);
-      final state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => now);
+      final state = AppState(_fill(Store.open('${dir.path}/app.db')), backups: backups, clock: () => now);
       expect(backups.list().map((b) => b.day), [DateTime(2026, 10, 23)]);
 
       state.checkDate(); // same day: nothing new
@@ -742,7 +767,7 @@ void main() {
     test('restore brings back old data and can itself be undone', () async {
       final backups = Backups(Directory('${dir.path}/backups'));
       var now = DateTime(2026, 10, 23);
-      final state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => now);
+      final state = AppState(_fill(Store.open('${dir.path}/app.db')), backups: backups, clock: () => now);
       final weights = state.habits.firstWhere((h) => h.name == 'Weights');
       state.cycle(now, weights); // done, after the 23rd's copy was taken
       state.setTheme('Sunset');
@@ -773,7 +798,7 @@ void main() {
     test('a damaged copy is refused and changes nothing', () async {
       final backups = Backups(Directory('${dir.path}/backups'));
       final day = DateTime(2026, 10, 23);
-      final state = AppState(Store.open('${dir.path}/app.db'), backups: backups, clock: () => day);
+      final state = AppState(_fill(Store.open('${dir.path}/app.db')), backups: backups, clock: () => day);
       final copy = backups.list().single;
       copy.file.writeAsStringSync('not a database');
       final weights = state.habits.firstWhere((h) => h.name == 'Weights');
@@ -799,7 +824,7 @@ void main() {
     late AppState state;
     await tester.runAsync(() async {
       state = AppState(
-        Store.open('${dir.path}/app.db'),
+        _fill(Store.open('${dir.path}/app.db')),
         backups: backups,
         dataFolder: DataFolder.load(dir, dir),
         clock: () => now,
@@ -845,7 +870,21 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final store = _sheet();
+    const todos = {
+      'Chloe money back and forth': true,
+      'Update spending tracker': true,
+      'Find all sunglasses': true,
+      'Change PC password': true,
+      'Transfer journals': true,
+      'Clean inside of car': true,
+      'Dust room': false,
+      'Vacuum and mop bedroom floor': false,
+      'Work out how to use Google Drive on Linux': true,
+      'Delete screenshots from Google Photos and all local copies': true,
+    };
+    todos.forEach((text, done) => store.addTodo(TodoScope.today, DateTime(2026, 10, 23), text, done: done));
+    final state = AppState(store, clock: () => DateTime(2026, 10, 23));
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
@@ -915,7 +954,7 @@ void main() {
     await _loadFonts();
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     state.addHabit(2026, 10, 'A ritual with a name long enough to need two lines here');
     // 2500 x 1380 is the window on the user's 1440p screen.
     for (final size in const [Size(2500, 1380), Size(1440, 900), Size(1920, 1080), Size(960, 1040)]) {
@@ -937,7 +976,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 24));
     state.setRestWeekends(true);
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
@@ -956,7 +995,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24, 1, 30));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 24, 1, 30));
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
     expect(find.text('SATURDAY'), findsOneWidget);
@@ -983,7 +1022,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
 
@@ -1047,7 +1086,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     await tester.pumpWidget(EclipseApp(state: state));
     state.showMonth(10);
     await tester.pumpAndSettle();
@@ -1084,7 +1123,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     for (final t in [...state.todos[TodoScope.week]!]) {
       state.removeTodo(TodoScope.week, t);
     }
@@ -1113,7 +1152,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     for (final t in [...state.todos[TodoScope.week]!]) {
       state.removeTodo(TodoScope.week, t);
     }
@@ -1155,7 +1194,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     await tester.pumpWidget(EclipseApp(state: state));
     state.showMonth(10);
     await tester.pumpAndSettle();
@@ -1182,7 +1221,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     final updater = Updater(repo: '/nowhere', installedCommit: 'abc', executable: '/nowhere/eclipse');
     await tester.pumpWidget(EclipseApp(state: state, updater: updater));
     await tester.pumpAndSettle();
@@ -1229,7 +1268,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     var now = DateTime(2026, 10, 22, 12);
-    final state = AppState(Store.memory(), clock: () => now);
+    final state = AppState(_sheet(), clock: () => now);
     state.addTodo(TodoScope.today, 'Return library books');
     final read = state.habits.firstWhere((h) => h.name == 'Read');
     state.cycle(DateTime(2026, 10, 22), read);
@@ -1269,7 +1308,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 24));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 24));
     final read = state.habits.firstWhere((h) => h.name == 'Read');
     for (final (month, days) in [(8, 10), (9, 4), (10, 2)]) {
       state.habitsFor(2026, month);
@@ -1305,6 +1344,8 @@ void main() {
 
     final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
     expect(state.firstRun, isTrue);
+    expect(state.habits.first.name, 'Drink water on waking', reason: 'a new install starts with examples');
+    expect(state.todos[TodoScope.today]!.first.text, 'Tick this off to try it');
     expect(AppState(state.store).firstRun, isFalse, reason: 'only an empty store is a first run');
     state.showMonth(3);
     state.startTour();
@@ -1313,6 +1354,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Eclipse!'), findsOneWidget);
+    // Tests only decode images when asked to.
+    await tester.runAsync(() async {
+      for (final e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.pump();
     await _shoot(tester, 'tour_0');
     await tester.tap(find.text('Show me around'));
     await tester.pumpAndSettle();
@@ -1345,7 +1393,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    final state = AppState(Store.memory(), clock: () => DateTime(2026, 10, 23));
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
     // A little history so streaks, trails and the grid show every status.
     for (final (i, h) in state.habits.indexed) {
       for (var d = 14; d <= 23; d++) {

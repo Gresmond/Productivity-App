@@ -231,11 +231,11 @@ Palette partnerOf(String? name, {required bool dark}) {
 }
 
 Palette paletteNamed(String? name) =>
-    palettes.firstWhere((p) => p.name == name, orElse: () => solarEclipsePalette);
+    palettes.firstWhere((p) => p.name == name, orElse: () => sunrisePalette);
 
 final _themes = {for (final p in palettes) p.name: buildTheme(p)};
 
-/// The cached ThemeData for a palette name (Solar Eclipse when unknown).
+/// The cached ThemeData for a palette name (Sunrise when unknown).
 ThemeData themeNamed(String? name) => _themes[paletteNamed(name).name]!;
 
 ThemeData buildTheme(Palette p) {

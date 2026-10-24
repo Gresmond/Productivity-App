@@ -395,7 +395,11 @@ class _StepBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (welcome) ...[const _EclipseMark(size: 64), const SizedBox(height: 18)],
+        if (welcome) ...[
+          // The app's own icon, drawn from design/icon/eclipse.svg.
+          Image.asset('assets/icon/eclipse.png', width: 72, height: 72, filterQuality: FilterQuality.medium),
+          const SizedBox(height: 18),
+        ],
         Text(
           step.title,
           style: TextStyle(
@@ -515,63 +519,4 @@ class _PillButtonState extends State<_PillButton> {
       ),
     );
   }
-}
-
-/// The app's diamond ring, drawn in the theme: a dark moon, its corona in
-/// the gradient, and one bright bead where the sun breaks through.
-class _EclipseMark extends StatelessWidget {
-  const _EclipseMark({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return CustomPaint(
-      size: Size.square(size),
-      painter: _EclipsePainter(corona: p.gradient, moon: p.brightness == Brightness.dark ? p.background : p.ink),
-    );
-  }
-}
-
-class _EclipsePainter extends CustomPainter {
-  _EclipsePainter({required this.corona, required this.moon});
-
-  final List<Color> corona;
-  final Color moon;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.shortestSide * 0.34;
-    final ring = Rect.fromCircle(center: c, radius: r + 3);
-    canvas.drawCircle(
-      c,
-      r + 6,
-      Paint()
-        ..shader = RadialGradient(colors: [corona.last.withValues(alpha: 0.45), corona.last.withValues(alpha: 0)])
-            .createShader(Rect.fromCircle(center: c, radius: r + 14)),
-    );
-    canvas.drawCircle(
-      c,
-      r + 3,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..shader = SweepGradient(colors: [...corona, corona.first]).createShader(ring),
-    );
-    canvas.drawCircle(c, r, Paint()..color = moon);
-    final bead = c + Offset.fromDirection(-math.pi / 4, r + 3);
-    canvas.drawCircle(
-      bead,
-      9,
-      Paint()
-        ..shader = RadialGradient(colors: [corona.last, corona.last.withValues(alpha: 0)])
-            .createShader(Rect.fromCircle(center: bead, radius: 9)),
-    );
-    canvas.drawCircle(bead, 2.6, Paint()..color = const Color(0xFFFFFFFF));
-  }
-
-  @override
-  bool shouldRepaint(_EclipsePainter old) => old.corona != corona || old.moon != moon;
 }
