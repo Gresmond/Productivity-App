@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as pth;
+
 import 'dart:async';
 import 'dart:io';
 
@@ -125,8 +127,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
   Future<void> _pickJournal() async {
     final state = AppScope.of(context);
     final current = state.journalFiles!.dir;
-    final folder = await DataFolder.pick(start: current.parent.path, title: 'Save journal entries in');
-    if (folder == null || !mounted) return;
+    final picked = await DataFolder.pick(start: current.parent.path, title: 'Save journal entries in');
+    if (picked == null || !mounted) return;
+    final folder = pth.basename(picked.path) == 'Eclipse Journals'
+        ? picked
+        : Directory(pth.join(picked.path, 'Eclipse Journals'));
     setState(() {
       _newJournal = folder.path == current.path ? null : folder;
       _error = null;
@@ -146,7 +151,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
     } on FileSystemException catch (e) {
       setState(() {
         _newJournal = null;
-        _error = 'Some entries couldn\'t be moved, so they\'re still in the old folder '
+        _error =
+            'Some entries couldn\'t be moved, so they\'re still in the old folder '
             '(${e.osError?.message ?? e.message}). New entries are saved in ${_shortPath(folder.path)}.';
       });
     }
@@ -207,12 +213,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 curve: Motion.morphCurve,
                 alignment: Alignment.topCenter,
                 child: FadeThrough(
-                  layoutBuilder: (current, previous) =>
-                      Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
-                  child: KeyedSubtree(
-                    key: ValueKey(_ribbon),
-                    child: _ribbon == 0 ? _general(p) : _backupsAndSync(p),
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.topLeft,
+                    children: [
+                      for (final w in previous) Positioned(left: 0, right: 0, top: 0, child: w),
+                      ?current,
+                    ],
                   ),
+                  child: KeyedSubtree(key: ValueKey(_ribbon), child: _ribbon == 0 ? _general(p) : _backupsAndSync(p)),
                 ),
               ),
               const SizedBox(height: 14),
@@ -364,6 +372,12 @@ extension on _SettingsDialogState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (state.dataFolder != null) ...[_dataFolder(p, state.dataFolder!)],
+        if (state.sync != null) ...[
+          const SizedBox(height: 10),
+          ListenableBuilder(listenable: state.sync!, builder: (context, _) => _sync(p, state.sync!)),
+        ],
+        const SizedBox(height: 18),
         Text(
           'Restore a copy',
           style: TextStyle(fontFamily: Fonts.ui, fontSize: 16, fontWeight: FontWeight.w600, color: p.ink),
@@ -386,7 +400,7 @@ extension on _SettingsDialogState {
           )
         else
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 380),
+            constraints: const BoxConstraints(maxHeight: 240),
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _backups.length,
@@ -409,11 +423,6 @@ extension on _SettingsDialogState {
             _error!,
             style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.missed),
           ),
-        ],
-        if (state.dataFolder != null) ...[const SizedBox(height: 18), _dataFolder(p, state.dataFolder!)],
-        if (state.sync != null) ...[
-          const SizedBox(height: 10),
-          ListenableBuilder(listenable: state.sync!, builder: (context, _) => _sync(p, state.sync!)),
         ],
       ],
     );
@@ -533,7 +542,13 @@ extension on _SettingsDialogState {
         const SizedBox(height: 4),
         Text(
           'Changes made here go up within a minute, and changes from your other computers come down every few '
-          'minutes. $status',
+          'minutes.',
+          style: small,
+        ),
+        Text(
+          status,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: sync.error != null && !sync.busy ? small.copyWith(color: p.missed) : small,
         ),
         Align(alignment: Alignment.centerRight, child: button('Turn off', sync.busy ? null : sync.turnOff)),
@@ -542,7 +557,7 @@ extension on _SettingsDialogState {
       body = [
         Text(
           'The Drive of ${account.email} already has Eclipse data from another computer. Replace everything on '
-          'this computer with it? A copy of what\'s here now is saved first, as Before joining sync above.',
+          'this computer with it? A copy of what\'s here now is saved first, as Before joining sync below.',
           style: small.copyWith(color: p.ink),
         ),
         const SizedBox(height: 8),
@@ -620,7 +635,6 @@ extension on _SettingsDialogState {
       _ => 'at ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
     };
   }
-
 }
 
 String _shortPath(String path) {
