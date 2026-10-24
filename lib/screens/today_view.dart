@@ -22,6 +22,9 @@ class TodayView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final day = state.shownDay;
+    final past = state.viewDay != null;
     return LayoutBuilder(
       builder: (context, constraints) {
         // When width is tight (e.g. a tiled window under 860px), scroll sideways
@@ -34,22 +37,18 @@ class TodayView extends StatelessWidget {
           children: [
             const Expanded(flex: 11, child: _HabitColumn()),
             const SizedBox(width: _gap),
-            const Expanded(flex: 9, child: TodoPanel(scope: TodoScope.today)),
+            Expanded(flex: 9, child: TodoPanel(scope: TodoScope.today, day: past ? day : null)),
             const SizedBox(width: _gap),
             Expanded(
               flex: 9,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Expanded(child: TodoPanel(scope: TodoScope.week)),
+                  Expanded(child: TodoPanel(scope: TodoScope.week, day: past ? day : null)),
                   const SizedBox(height: _gap),
-                  const Expanded(child: TodoPanel(scope: TodoScope.month)),
+                  Expanded(child: TodoPanel(scope: TodoScope.month, day: past ? day : null)),
                   const SizedBox(height: _gap),
-                  Expanded(
-                    child: _JournalCard(
-                      key: ValueKey((dateKey(AppScope.of(context).today), AppScope.of(context).restores)),
-                    ),
-                  ),
+                  Expanded(child: _JournalCard(key: ValueKey((dateKey(day), state.restores)))),
                 ],
               ),
             ),
@@ -84,7 +83,8 @@ class _HabitColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final rituals = state.habits, sleep = state.sleepHabits;
+    final day = state.shownDay;
+    final rituals = state.habitsFor(day.year, day.month), sleep = state.sleepHabits;
     return LayoutBuilder(
       builder: (context, constraints) {
         final rows = constraints.maxHeight - 2 * _HabitsCard.chrome - TodayView._gap;
@@ -183,7 +183,8 @@ class _HabitsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    final day = state.today;
+    final day = state.shownDay;
+    final past = state.viewDay != null;
     final done = state.doneOn(day, habits);
     final total = habits.length;
     final subtitle = done == total && total > 0
@@ -228,12 +229,16 @@ class _HabitsCard extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final rows = _layOutRows(context, habits, constraints);
-                return ListView.builder(
+                // A past day is to look at only.
+                return IgnorePointer(
+                  ignoring: past,
+                  child: ListView.builder(
                   padding: EdgeInsets.zero,
                   itemExtentBuilder: (i, _) => i < total ? rows.heights[i] : null,
                   itemCount: total,
                   itemBuilder: (context, i) =>
                       _HabitRow(habit: habits[i], day: day, cellSize: rows.cell, weekTrail: rows.trail, divider: i > 0),
+                  ),
                 );
               },
             ),
@@ -329,7 +334,9 @@ class _HabitRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    final streak = state.currentStreak(habit);
+    // Streaks run up to today, so a past day leaves them out.
+    final past = state.viewDay != null;
+    final streak = past ? 0 : state.currentStreak(habit);
     final best = state.bestStreak(habit);
 
     return _HoverHighlight(
@@ -361,7 +368,9 @@ class _HabitRow extends StatelessWidget {
             ],
             const SizedBox(width: 8),
             Tooltip(
-              message: streak == 0
+              message: past
+                  ? ''
+                  : streak == 0
                   ? (best > 0 ? 'Best streak: $best days' : 'No streak yet')
                   : '$streak day streak${best > streak ? '  ·  best $best' : ''}',
               child: SizedBox(
@@ -396,6 +405,8 @@ class _HabitRow extends StatelessWidget {
                             ],
                           ),
                         )
+                      : past
+                      ? const SizedBox.shrink(key: ValueKey(-1))
                       : Text(
                           '–',
                           key: const ValueKey(0),
@@ -484,7 +495,7 @@ class _JournalCardState extends State<_JournalCard> {
     super.didChangeDependencies();
     _state = AppScope.of(context);
     if (_controller == null) {
-      _day = _state.today;
+      _day = _state.shownDay;
       _controller = TextEditingController(text: _state.journalOf(_day));
     }
   }
@@ -525,6 +536,7 @@ class _JournalCardState extends State<_JournalCard> {
           Expanded(
             child: TextField(
               controller: _controller,
+              readOnly: state.viewDay != null,
               expands: true,
               maxLines: null,
               textAlignVertical: TextAlignVertical.top,
@@ -534,8 +546,10 @@ class _JournalCardState extends State<_JournalCard> {
                 height: 1.35,
                 color: p.ink,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
+                hintText: state.viewDay != null ? 'Nothing written this day.' : null,
+                hintStyle: TextStyle(fontFamily: Fonts.body, fontSize: 14, color: p.inkMuted.withValues(alpha: 0.6)),
               ),
               onChanged: _changed,
             ),

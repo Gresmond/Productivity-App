@@ -51,6 +51,12 @@ class AppState extends ChangeNotifier {
   /// 1-12 when a month tab is open, null for the Today view.
   int? viewMonth;
 
+  /// A past day the Today view is showing, to look at only; null for today.
+  DateTime? viewDay;
+
+  /// The day the Today view shows.
+  DateTime get shownDay => viewDay ?? today;
+
   /// Name of the chosen colour theme; null until one is picked.
   late String? themeName = _savedTheme();
   late final ValueNotifier<String?> themeNotifier = ValueNotifier(themeName);
@@ -165,6 +171,7 @@ class AppState extends ChangeNotifier {
     }
     lateNight = late;
     if (viewYear == today.year) viewYear = now.year;
+    if (viewDay == now) viewDay = null;
     today = now;
     _streaks.clear();
     _backUp();
@@ -229,12 +236,22 @@ class AppState extends ChangeNotifier {
 
   void showToday() {
     viewMonth = null;
+    viewDay = null;
+    viewYear = today.year;
+    notifyListeners();
+  }
+
+  /// Opens a past day's card in the Today view.
+  void showDay(DateTime day) {
+    viewMonth = null;
+    viewDay = day.isBefore(today) ? dateOnly(day) : null;
     viewYear = today.year;
     notifyListeners();
   }
 
   void showMonth(int month) {
     viewMonth = month;
+    viewDay = null;
     notifyListeners();
   }
 
@@ -424,9 +441,12 @@ class AppState extends ChangeNotifier {
 
   void addTodo(TodoScope scope, String text) {
     if (text.trim().isEmpty) return;
-    todos[scope]!.add(store.addTodo(scope, scope.period(today), capitaliseFirst(text.trim())));
+    todos[scope]!.add(store.addTodo(scope, today, capitaliseFirst(text.trim())));
     notifyListeners();
   }
+
+  /// A scope's list as it stood on a past [day].
+  List<TodoItem> todosOn(TodoScope scope, DateTime day) => store.todosOn(scope, day);
 
   void toggleTodo(TodoItem item) {
     item.done = !item.done;
@@ -501,8 +521,7 @@ class AppState extends ChangeNotifier {
       'Work out how to use Google Drive on Linux': true,
       'Delete screenshots from Google Photos and all local copies': true,
     };
-    final period = TodoScope.today.period(today);
-    sheetTodos.forEach((text, done) => store.addTodo(TodoScope.today, period, text, done: done));
+    sheetTodos.forEach((text, done) => store.addTodo(TodoScope.today, today, text, done: done));
   }
 }
 

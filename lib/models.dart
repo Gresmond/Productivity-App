@@ -49,15 +49,22 @@ enum TodoScope {
 }
 
 class TodoItem {
-  TodoItem(this.id, this.text, {this.done = false, this.carried = 0});
+  TodoItem(this.id, this.text, {required this.since, this.done = false, this.carried = 0});
 
   final int id;
   String text;
   bool done;
 
+  /// The day it was added. An item still open from an earlier day, week or
+  /// month shows it as "From dd/mm".
+  final DateTime since;
+
   /// How many times this item has rolled over unfinished.
   int carried;
 }
+
+/// '24/10'.
+String dayMonth(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
 /// [text] with its first letter upper-case; the rest is left alone.
 String capitaliseFirst(String text) {

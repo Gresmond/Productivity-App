@@ -13,9 +13,13 @@ import 'mark.dart';
 import 'tile.dart';
 
 class TodoPanel extends StatefulWidget {
-  const TodoPanel({super.key, required this.scope});
+  const TodoPanel({super.key, required this.scope, this.day});
 
   final TodoScope scope;
+
+  /// A past day to show the list as it stood then, to look at only; null
+  /// for today's list.
+  final DateTime? day;
 
   @override
   State<TodoPanel> createState() => _TodoPanelState();
@@ -30,7 +34,11 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
   late final _slide = AnimationController(vsync: this, duration: Motion.click + Motion.morph, value: 1);
   late final _curved = CurvedAnimation(
     parent: _slide,
-    curve: Interval(Motion.click.inMicroseconds / (Motion.click + Motion.morph).inMicroseconds, 1, curve: Motion.morphCurve),
+    curve: Interval(
+      Motion.click.inMicroseconds / (Motion.click + Motion.morph).inMicroseconds,
+      1,
+      curve: Motion.morphCurve,
+    ),
   );
   List<int> _order = const [];
 
@@ -65,7 +73,8 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    final all = state.todos[widget.scope]!;
+    final day = widget.day;
+    final all = day == null ? state.todos[widget.scope]! : state.todosOn(widget.scope, day);
     // Ticked items gather at the top, crossed off; what's left sits below.
     final items = [...all.where((t) => t.done), ...all.where((t) => !t.done)];
     final open = all.length - all.where((t) => t.done).length;
@@ -136,47 +145,54 @@ class _TodoPanelState extends State<TodoPanel> with SingleTickerProviderStateMix
                         for (final item in items)
                           RepaintBoundary(
                             key: ValueKey(item.id),
-                            child: _TodoRow(scope: widget.scope, item: item, fadeIn: seen.add(item.id)),
+                            child: _TodoRow(
+                              scope: widget.scope,
+                              item: item,
+                              day: day ?? state.today,
+                              readOnly: day != null,
+                              fadeIn: seen.add(item.id),
+                            ),
                           ),
                       ],
                     ),
                   ),
           ),
-          Container(
-            margin: const EdgeInsets.only(top: 6, right: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
-            decoration: BoxDecoration(
-              color: p.empty.withValues(alpha: _focus.hasFocus ? 0.65 : 0.45),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: _focus.hasFocus ? p.accent.withValues(alpha: 0.45) : Colors.transparent,
-                width: 1.0,
+          if (day == null)
+            Container(
+              margin: const EdgeInsets.only(top: 6, right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
+              decoration: BoxDecoration(
+                color: p.empty.withValues(alpha: _focus.hasFocus ? 0.65 : 0.45),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _focus.hasFocus ? p.accent.withValues(alpha: 0.45) : Colors.transparent,
+                  width: 1.0,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.add_rounded, size: 18, color: _focus.hasFocus ? p.accent : p.inkMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focus,
+                      textCapitalization: TextCapitalization.sentences,
+                      inputFormatters: const [_CapitaliseFirst()],
+                      style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.ink),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        hintText: 'Add a task',
+                        hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.65)),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                      ),
+                      onSubmitted: (_) => _submit(state),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.add_rounded, size: 18, color: _focus.hasFocus ? p.accent : p.inkMuted),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focus,
-                    textCapitalization: TextCapitalization.sentences,
-                    inputFormatters: const [_CapitaliseFirst()],
-                    style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.ink),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Add a task',
-                      hintStyle: TextStyle(fontFamily: Fonts.body, color: p.inkMuted.withValues(alpha: 0.65)),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 9),
-                    ),
-                    onSubmitted: (_) => _submit(state),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -371,10 +387,23 @@ class _RenderSlidingColumn extends RenderBox
 }
 
 class _TodoRow extends StatefulWidget {
-  const _TodoRow({required this.scope, required this.item, this.fadeIn = false});
+  const _TodoRow({
+    required this.scope,
+    required this.item,
+    required this.day,
+    this.readOnly = false,
+    this.fadeIn = false,
+  });
 
   final TodoScope scope;
   final TodoItem item;
+
+  /// The day the list is for; an item from before its day, week or month
+  /// says when it's from.
+  final DateTime day;
+
+  /// A past day's row: no ticking or removing.
+  final bool readOnly;
 
   /// Fades in when first shown: a newly added item.
   final bool fadeIn;
@@ -395,97 +424,104 @@ class _TodoRowState extends State<_TodoRow> {
     final p = context.palette;
     final state = AppScope.of(context);
     final item = widget.item;
+    final carried = widget.scope.period(item.since) != widget.scope.period(widget.day);
 
     return Appear(
       animate: widget.fadeIn,
       shown: !_leaving,
       onHidden: () => state.removeTodo(widget.scope, item),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() {
-          _hover = false;
-          _pressed = false;
-        }),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTap: () => state.toggleTodo(item),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: HoverFill(
-              hover: _hover,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                child: Row(
-                  children: [
-                    _Check(done: item.done, hover: _hover, pressed: _pressed),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: AnimatedDefaultTextStyle(
-                        duration: Motion.click,
-                        curve: Motion.clickCurve,
-                        style: TextStyle(
-                          fontFamily: Fonts.body,
-                          fontSize: 14,
-                          height: 1.35,
-                          color: item.done
-                              ? p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.75 : 0.7)
-                              : p.ink,
-                          decoration: item.done ? TextDecoration.lineThrough : null,
-                          decorationColor: p.inkMuted.withValues(alpha: 0.45),
+      child: IgnorePointer(
+        ignoring: widget.readOnly,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() {
+            _hover = false;
+            _pressed = false;
+          }),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapUp: (_) => setState(() => _pressed = false),
+            onTapCancel: () => setState(() => _pressed = false),
+            onTap: () => state.toggleTodo(item),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: HoverFill(
+                hover: _hover,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  child: Row(
+                    children: [
+                      _Check(done: item.done, hover: _hover, pressed: _pressed),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: AnimatedDefaultTextStyle(
+                          duration: Motion.click,
+                          curve: Motion.clickCurve,
+                          style: TextStyle(
+                            fontFamily: Fonts.body,
+                            fontSize: 14,
+                            height: 1.35,
+                            color: item.done
+                                ? p.inkMuted.withValues(alpha: p.brightness == Brightness.dark ? 0.75 : 0.7)
+                                : p.ink,
+                            decoration: item.done ? TextDecoration.lineThrough : null,
+                            decorationColor: p.inkMuted.withValues(alpha: 0.45),
+                          ),
+                          child: Text(item.text, maxLines: 2, overflow: TextOverflow.ellipsis),
                         ),
-                        child: Text(item.text, maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
-                    ),
-                    if (item.carried > 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: p.missed.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.history_rounded, size: 11, color: p.missed),
-                            const SizedBox(width: 3),
-                            Text(
-                              'carried ×${item.carried}',
-                              style: TextStyle(
-                                fontFamily: Fonts.ui,
-                                fontSize: 10.5,
-                                color: p.missed,
-                                fontWeight: FontWeight.w600,
+                      if (carried) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: p.missed.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.history_rounded, size: 11, color: p.missed),
+                              const SizedBox(width: 3),
+                              Text(
+                                'From ${dayMonth(item.since)}',
+                                style: TextStyle(
+                                  fontFamily: Fonts.ui,
+                                  fontSize: 10.5,
+                                  color: p.missed,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                    AnimatedOpacity(
-                      opacity: _hover ? 1 : 0,
-                      duration: Motion.hover,
-                      curve: Motion.hoverCurve,
-                      child: Tooltip(
-                        message: 'Remove',
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: _hover && !_leaving ? () => setState(() => _leaving = true) : null,
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: p.empty.withValues(alpha: 0.8)),
-                              child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
+                      ],
+                      AnimatedOpacity(
+                        opacity: _hover ? 1 : 0,
+                        duration: Motion.hover,
+                        curve: Motion.hoverCurve,
+                        child: Tooltip(
+                          message: 'Remove',
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: _hover && !_leaving ? () => setState(() => _leaving = true) : null,
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: p.empty.withValues(alpha: 0.8),
+                                ),
+                                child: Icon(Icons.close_rounded, size: 14, color: p.inkMuted),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -151,6 +151,22 @@ class Store {
         ''');
       });
     }
+    if (version < 6) {
+      _transaction(() {
+        _db.execute('''
+          -- The day a to-do was added. With period (the last day, week or
+          -- month it was on) it says which lists it was on. Older items get
+          -- a guess, one period back per carry.
+          ALTER TABLE todos ADD COLUMN since TEXT;
+          UPDATE todos SET since = CASE scope
+            WHEN 'today' THEN date(period, '-' || carried || ' days')
+            WHEN 'week' THEN date(period, '-' || (7 * carried) || ' days')
+            ELSE date(period || '-01', '-' || carried || ' months')
+          END;
+          PRAGMA user_version = 6;
+        ''');
+      });
+    }
   }
 
   // Habits
@@ -276,16 +292,33 @@ class Store {
 
   List<TodoItem> todos(TodoScope scope, String period) => [
         for (final r in _db.select(
-          'SELECT id, text, done, carried FROM todos WHERE scope = ? AND period = ? ORDER BY id',
+          'SELECT id, text, done, carried, since FROM todos WHERE scope = ? AND period = ? ORDER BY id',
           [scope.name, period],
         ))
-          TodoItem(
-            r['id'] as int,
-            r['text'] as String,
-            done: r['done'] == 1,
-            carried: r['carried'] as int,
-          ),
+          _todo(r),
       ];
+
+  /// The list as it stood on [day]: everything added by then and still open
+  /// that day. An item ticked off later shows unticked, as it was.
+  List<TodoItem> todosOn(TodoScope scope, DateTime day) {
+    final period = scope.period(day);
+    return [
+      for (final r in _db.select(
+        'SELECT id, text, done, carried, since, period FROM todos WHERE scope = ? AND period >= ? ORDER BY id',
+        [scope.name, period],
+      ))
+        if (scope.period(DateTime.parse(r['since'] as String)).compareTo(period) <= 0)
+          _todo(r)..done = r['done'] == 1 && r['period'] == period,
+    ];
+  }
+
+  static TodoItem _todo(Row r) => TodoItem(
+        r['id'] as int,
+        r['text'] as String,
+        since: DateTime.parse(r['since'] as String),
+        done: r['done'] == 1,
+        carried: r['carried'] as int,
+      );
 
   /// Moves unfinished to-dos from earlier periods into [period]. Returns how
   /// many moved.
@@ -302,12 +335,12 @@ class Store {
     return _db.updatedRows;
   }
 
-  TodoItem addTodo(TodoScope scope, String period, String text, {bool done = false}) {
+  TodoItem addTodo(TodoScope scope, DateTime day, String text, {bool done = false}) {
     _db.execute(
-      'INSERT INTO todos (scope, period, text, done) VALUES (?, ?, ?, ?)',
-      [scope.name, period, text, done ? 1 : 0],
+      'INSERT INTO todos (scope, period, text, done, since) VALUES (?, ?, ?, ?, ?)',
+      [scope.name, scope.period(day), text, done ? 1 : 0, dateKey(day)],
     );
-    return TodoItem(_db.lastInsertRowId, text, done: done);
+    return TodoItem(_db.lastInsertRowId, text, since: day, done: done);
   }
 
   void setTodoDone(int id, bool done) {

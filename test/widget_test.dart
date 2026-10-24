@@ -326,6 +326,44 @@ void main() {
       expect(state.todos[TodoScope.month]!.map((t) => (t.text, t.carried)), [('Monthly', 1)]);
     });
 
+    test('a past day keeps its list as it stood, ticked and unticked', () {
+      var now = DateTime(2026, 10, 22, 12); // Thursday
+      final state = AppState(Store.memory(), clock: () => now);
+      state.todos[TodoScope.today]!.toList().forEach((t) => state.removeTodo(TodoScope.today, t));
+      state.addTodo(TodoScope.today, 'collect prescription');
+      state.addTodo(TodoScope.today, 'Finished');
+      state.toggleTodo(state.todos[TodoScope.today]!.last);
+      expect(state.todos[TodoScope.today]!.first.text, 'Collect prescription', reason: 'capitalised');
+
+      now = DateTime(2026, 10, 24, 9); // Saturday: carried twice
+      state.checkDate();
+      state.toggleTodo(state.todos[TodoScope.today]!.single);
+
+      String list(DateTime day) =>
+          state.todosOn(TodoScope.today, day).map((t) => '${t.text}${t.done ? ' ✓' : ''}').join(', ');
+      expect(list(DateTime(2026, 10, 22)), 'Collect prescription, Finished ✓');
+      expect(list(DateTime(2026, 10, 23)), 'Collect prescription', reason: 'carried through, still open then');
+      expect(list(DateTime(2026, 10, 24)), 'Collect prescription ✓');
+      expect(state.todos[TodoScope.today]!.single.since, DateTime(2026, 10, 22));
+    });
+
+    test('older to-dos get a since date one period back per carry', () {
+      final path = '${Directory.systemTemp.createTempSync('productivity_since').path}/old.db';
+      Store.open(path).close();
+      final db = sqlite3.open(path);
+      db.execute('''
+        ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 5;
+        INSERT INTO todos (scope, period, text, carried) VALUES
+          ('today', '2026-10-24', 'Day', 2), ('week', '2026-10-19', 'Week', 1), ('month', '2026-10', 'Month', 1);
+      ''');
+      db.close();
+      final store = Store.open(path);
+      expect(store.todos(TodoScope.today, '2026-10-24').single.since, DateTime(2026, 10, 22));
+      expect(store.todos(TodoScope.week, '2026-10-19').single.since, DateTime(2026, 10, 12));
+      expect(store.todos(TodoScope.month, '2026-10').single.since, DateTime(2026, 9, 1));
+      store.close();
+    });
+
     test('nothing vanishes when the clock goes back over midnight', () {
       var now = DateTime(2026, 10, 24, 0, 30); // flew in from further east
       final state = AppState(Store.memory(), clock: () => now);
@@ -444,7 +482,7 @@ void main() {
       final db = sqlite3.open(path);
       db.execute('''
         DELETE FROM sleep_habits; DELETE FROM habits; DROP TABLE sleep_habits;
-        ALTER TABLE month_habits DROP COLUMN note; PRAGMA user_version = 2;
+        ALTER TABLE month_habits DROP COLUMN note; ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 2;
       ''');
       final ids = <String, int>{};
       for (final (i, name) in [
@@ -542,7 +580,7 @@ void main() {
       db.execute('''
         ALTER TABLE month_habits DROP COLUMN note; ALTER TABLE habits ADD COLUMN note TEXT;
         INSERT INTO habits (note) VALUES ('Home gym');
-        PRAGMA user_version = 4;
+        ALTER TABLE todos DROP COLUMN since; PRAGMA user_version = 4;
       ''');
       final id = db.lastInsertRowId;
       db.execute("INSERT INTO month_habits VALUES (2026, 9, ?, 'Gym', 0), (2026, 10, ?, 'Gym', 0)", [id, id]);
@@ -1073,6 +1111,47 @@ void main() {
     await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();
     expect(updater.status, UpdateStatus.none);
+  });
+
+  testWidgets('the big date opens a past day to look at', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    var now = DateTime(2026, 10, 22, 12);
+    final state = AppState(Store.memory(), clock: () => now);
+    state.addTodo(TodoScope.today, 'Return library books');
+    final read = state.habits.firstWhere((h) => h.name == 'Read');
+    state.cycle(DateTime(2026, 10, 22), read);
+    state.setJournal(DateTime(2026, 10, 22), 'A quiet Thursday.');
+    now = DateTime(2026, 10, 24, 9);
+    state.checkDate();
+
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+    expect(find.text('From 22/10'), findsWidgets);
+
+    await tester.tap(find.text('24 October').last);
+    await tester.pumpAndSettle();
+    expect(find.text('October 2026'), findsOneWidget);
+    await _shoot(tester, 'day_picker');
+    await tester.tap(find.text('25'));
+    await tester.pumpAndSettle();
+    expect(state.viewDay, isNull, reason: 'the future is not open');
+    await tester.tap(find.text('22'));
+    await tester.pumpAndSettle();
+
+    expect(state.viewDay, DateTime(2026, 10, 22));
+    expect(find.text('THURSDAY  ·  LOOKING BACK'), findsOneWidget);
+    expect(find.text('A quiet Thursday.'), findsOneWidget);
+    expect(find.text('Add a task'), findsNothing, reason: 'look only');
+    expect(find.text('From 22/10'), findsNothing, reason: 'it was new that day');
+    await _shoot(tester, 'past_day');
+
+    await tester.tap(find.text('Today').first);
+    await tester.pumpAndSettle();
+    expect(state.viewDay, isNull);
   });
 
   testWidgets('theme switcher, and every theme renders', (tester) async {

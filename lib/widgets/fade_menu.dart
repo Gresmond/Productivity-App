@@ -2,18 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Opens [builder]'s panel under [anchor], right edges lined up. It fades
+/// Opens [builder]'s panel under [anchor], right edges lined up (left
+/// edges with [alignLeft]). It fades
 /// in as one piece with a slight grow from its corner, at the speed of
 /// everything else that arrives, rather than Material's row-by-row reveal.
 /// A click outside, or Escape, closes it.
-Future<void> showFadeMenu(BuildContext anchor, {required WidgetBuilder builder, double gap = 8, double width = 330}) {
+Future<void> showFadeMenu(
+  BuildContext anchor, {
+  required WidgetBuilder builder,
+  double gap = 8,
+  double width = 330,
+  bool alignLeft = false,
+}) {
   final box = anchor.findRenderObject()! as RenderBox;
   final overlay = Navigator.of(anchor).overlay!.context.findRenderObject()! as RenderBox;
   final rect = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
   return Navigator.of(anchor).push(
     _FadeMenuRoute(
       top: rect.bottom + gap,
-      right: overlay.size.width - rect.right,
+      left: alignLeft ? rect.left : null,
+      right: alignLeft ? null : overlay.size.width - rect.right,
       width: width,
       builder: builder,
       barrierLabel: MaterialLocalizations.of(anchor).modalBarrierDismissLabel,
@@ -24,13 +32,17 @@ Future<void> showFadeMenu(BuildContext anchor, {required WidgetBuilder builder, 
 class _FadeMenuRoute extends PopupRoute<void> {
   _FadeMenuRoute({
     required this.top,
+    required this.left,
     required this.right,
     required this.width,
     required this.builder,
     required this.barrierLabel,
   });
 
-  final double top, right, width;
+  final double top, width;
+
+  /// One of the two is set: the edge the panel lines up with.
+  final double? left, right;
   final WidgetBuilder builder;
 
   @override
@@ -52,6 +64,7 @@ class _FadeMenuRoute extends PopupRoute<void> {
       children: [
         Positioned(
           top: top,
+          left: left,
           right: right,
           width: width,
           child: Material(
@@ -79,11 +92,14 @@ class _FadeMenuRoute extends PopupRoute<void> {
     Widget child,
   ) {
     final t = CurvedAnimation(parent: animation, curve: Motion.morphCurve);
+    // Grows from the panel's top corner on the anchor's side.
+    final size = MediaQuery.sizeOf(context);
+    final x = left ?? size.width - right!;
     return FadeTransition(
       opacity: t,
       child: ScaleTransition(
         scale: t.drive(Tween(begin: 0.96, end: 1.0)),
-        alignment: Alignment(1 - 2 * right / MediaQuery.sizeOf(context).width, -1 + 2 * top / MediaQuery.sizeOf(context).height),
+        alignment: Alignment(2 * x / size.width - 1, 2 * top / size.height - 1),
         child: child,
       ),
     );
