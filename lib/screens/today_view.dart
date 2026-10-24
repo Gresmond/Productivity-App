@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -541,7 +541,7 @@ class _JournalCard extends StatelessWidget {
           Expanded(
             child: FadeThrough(
               layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
-              child: _JournalText(key: ValueKey((dateKey(day), state.restores))),
+              child: _JournalText(key: ValueKey(dateKey(day))),
             ),
           ),
         ],
@@ -570,35 +570,41 @@ class _JournalTextState extends State<_JournalText> {
   /// outgoing day doesn't change as it fades.
   late bool _past;
 
-  /// Saves a moment after typing stops, rather than writing the database
-  /// and the day's file on every keystroke.
-  Timer? _pending;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _state = AppScope.of(context);
-    if (_controller == null) {
+    final controller = _controller;
+    if (controller == null) {
       _day = _state.shownDay;
       _past = _state.viewDay != null;
       _controller = TextEditingController(text: _state.journalOf(_day));
+      return;
     }
+    // Changed elsewhere (synced in, or a restore): shown in place, keeping
+    // focus and the cursor where it was in what you'd written. Typing not
+    // saved yet is newer than what's stored, and sync saves it before it
+    // merges, so it's never replaced.
+    if (_state.hasJournalDraft(_day)) return;
+    final text = _state.journalOf(_day);
+    final old = controller.value;
+    if (text == old.text) return;
+    final shift = old.text.isEmpty ? 0 : max(text.indexOf(old.text), 0);
+    controller.value = TextEditingValue(
+      text: text,
+      selection: old.selection.isValid
+          ? TextSelection(
+              baseOffset: min(old.selection.baseOffset + shift, text.length),
+              extentOffset: min(old.selection.extentOffset + shift, text.length),
+            )
+          : TextSelection.collapsed(offset: text.length),
+    );
   }
 
-  void _changed(String _) {
-    _pending?.cancel();
-    _pending = Timer(const Duration(milliseconds: 400), _save);
-  }
-
-  void _save() {
-    _pending?.cancel();
-    _pending = null;
-    _state.setJournal(_day, _controller!.text);
-  }
+  void _changed(String text) => _state.draftJournal(_day, text);
 
   @override
   void dispose() {
-    if (_pending != null) _save();
     _controller?.dispose();
     super.dispose();
   }

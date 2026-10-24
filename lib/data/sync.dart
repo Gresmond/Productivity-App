@@ -339,8 +339,11 @@ class SyncEngine {
       return _Reg(ours.kind, ours.rowkey, ours.field, ours.value, keep.ts, keep.origin, vv);
     }
     if (ours.kind == 'journal' && ours.field == 'text') {
-      // Neither saw the other: keep both, the earlier one first.
-      final (a, b) = ours.ts <= theirs.ts ? (ours, theirs) : (theirs, ours);
+      // Neither saw the other: keep both, the earlier one first. Every
+      // computer that merges the two makes the same text with the same
+      // versions, so their merges count as one edit, not two more to keep
+      // both of, and writing on after it replaces it.
+      final (a, b) = (ours.ts, ours.origin).compareTo(theirs.ts, theirs.origin) <= 0 ? (ours, theirs) : (theirs, ours);
       final ta = jsonDecode(a.value) as String, tb = jsonDecode(b.value) as String;
       final text = ta.trim().isEmpty
           ? tb
@@ -348,8 +351,9 @@ class SyncEngine {
           ? ta
           : '$ta\n\n---\n\n$tb';
       if (ta.trim().isNotEmpty && tb.trim().isNotEmpty) _keptBoth.add(ours.rowkey);
-      final ts = _tick();
-      return _Reg(ours.kind, ours.rowkey, ours.field, jsonEncode(text), ts, me, {...vv, me: ts});
+      // Sent on from here as this computer's, for any that haven't merged
+      // it yet.
+      return _Reg(ours.kind, ours.rowkey, ours.field, jsonEncode(text), _tick(), me, vv);
     }
     final win = (ours.ts, ours.origin).compareTo(theirs.ts, theirs.origin) >= 0 ? ours : theirs;
     return _Reg(ours.kind, ours.rowkey, ours.field, win.value, win.ts, win.origin, vv);

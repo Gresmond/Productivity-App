@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -24,6 +25,7 @@ class AppState extends ChangeNotifier {
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {
     sync?.onIncoming = _takeIncoming;
+    sync?.beforeMerge = saveJournalDraft;
     sync?.beforeJoin = () => backups?.beforeJoining(store);
     sync?.onClear = (days) {
       for (final day in days) {
@@ -77,8 +79,6 @@ class AppState extends ChangeNotifier {
     for (final day in incoming.journalDays) {
       _writeJournalFile(DateTime.parse(day), store.journal(day));
     }
-    // Only a changed journal resets the journal's text field.
-    if (incoming.journalDays.isNotEmpty) restores++;
     _load();
     checkDate();
     notifyListeners();
@@ -283,13 +283,10 @@ class AppState extends ChangeNotifier {
     _startDay();
   }
 
-  /// Bumped by each restore, so widgets holding their own copy of data
-  /// (the journal's text field) start afresh.
-  int restores = 0;
-
   /// Replaces all data with [backup]. What was there before is kept as a
   /// backup of its own.
   Future<void> restore(Backup backup) async {
+    saveJournalDraft(); // so it's in the before-restore copy
     final before = {for (final e in store.journalEntries()) e.day};
     await backups!.restore(store, backup);
     // The journal's files follow: the restored entries written out, and
@@ -298,7 +295,6 @@ class AppState extends ChangeNotifier {
     for (final day in {...before, ...after.keys}) {
       _writeJournalFile(DateTime.parse(day), after[day] ?? '');
     }
-    restores++;
     _load();
     checkDate(); // the backup may start its days at another hour
     notifyListeners();
@@ -579,6 +575,31 @@ class AppState extends ChangeNotifier {
   void setJournal(DateTime day, String text) {
     store.setJournal(dateKey(day), text);
     _writeJournalFile(day, text);
+  }
+
+  /// Typed but not saved yet: saved a moment after typing stops, rather
+  /// than on every keystroke, and at once before sync merges, a restore,
+  /// or quitting.
+  ({DateTime day, String text})? _draft;
+  Timer? _draftTimer;
+
+  void draftJournal(DateTime day, String text) {
+    if (_draft != null && _draft!.day != day) saveJournalDraft();
+    _draft = (day: day, text: text);
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 400), saveJournalDraft);
+  }
+
+  /// Whether [day] has typing not saved yet.
+  bool hasJournalDraft(DateTime day) => _draft?.day == day;
+
+  void saveJournalDraft() {
+    _draftTimer?.cancel();
+    _draftTimer = null;
+    final draft = _draft;
+    if (draft == null) return;
+    _draft = null;
+    setJournal(draft.day, draft.text);
   }
 
   /// Why the journal's files aren't being saved, for the folder button;

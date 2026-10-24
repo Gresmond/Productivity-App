@@ -83,6 +83,10 @@ class SyncService extends ChangeNotifier {
   /// in the database: to redraw, and write journal files.
   void Function(Incoming)? onIncoming;
 
+  /// Called before merging, to save what's still being typed, so the merge
+  /// takes it into account.
+  void Function()? beforeMerge;
+
   /// Called before joining replaces everything here, to save a copy of it
   /// first. If it throws, nothing is replaced.
   void Function()? beforeJoin;
@@ -108,9 +112,33 @@ class SyncService extends ChangeNotifier {
     _timer?.cancel();
     if (!isOn) return;
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      final changed = store.raw.select('SELECT 1 FROM sync_dirty LIMIT 1').isNotEmpty;
-      if (changed || DateTime.now().difference(_lastFull) > const Duration(minutes: 3)) unawaited(run());
+      if (_changed || DateTime.now().difference(_lastFull) > const Duration(minutes: 3)) unawaited(run());
     });
+  }
+
+  bool get _changed => store.raw.select('SELECT 1 FROM sync_dirty LIMIT 1').isNotEmpty;
+
+  /// Syncs unless a round started in the last 20 seconds: for when the
+  /// window comes back to the front, to show the latest from elsewhere.
+  void refresh() {
+    if (isOn && DateTime.now().difference(_lastFull) > const Duration(seconds: 20)) unawaited(run());
+  }
+
+  /// Sends what changed here now rather than at the next look: for when
+  /// the window goes to the back, as you may be switching computers.
+  void sendChanges() {
+    if (isOn && _changed) unawaited(run());
+  }
+
+  /// Syncs before the app quits, giving up after 5 seconds; what's left
+  /// goes the next time it opens.
+  Future<void> beforeQuit() async {
+    if (!isOn) return;
+    try {
+      await run().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      debugPrint('Sync before quitting took too long');
+    }
   }
 
   @override
@@ -141,6 +169,7 @@ class SyncService extends ChangeNotifier {
   /// data is merged with theirs (when it has synced before) or goes up as
   /// the start of it all.
   Future<void> turnOn(GoogleAccount account, {required bool join}) async {
+    beforeMerge?.call();
     if (join) {
       beforeJoin?.call();
       final days = engine.clearForJoining(); // not inside ?.call, which would skip it
@@ -237,6 +266,9 @@ class SyncService extends ChangeNotifier {
     try {
       final drive = _signedIn;
       final mine = await _pull(drive);
+      // From here to the merge's end nothing waits, so nothing typed can
+      // slip in between.
+      beforeMerge?.call();
       _deliver(folder.read(engine));
       engine.flush();
       final latest = engine.latest;

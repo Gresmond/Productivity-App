@@ -157,6 +157,32 @@ void main() {
     expect(pc.dump(), laptop.dump());
   });
 
+  test('both keeping both at once agree, and writing on afterwards replaces it, not doubled', () {
+    join();
+    _Computer.clock = 2000;
+    pc.store.setJournal('2026-10-24', 'A');
+    _Computer.clock = 3000;
+    laptop.store.setJournal('2026-10-24', 'B');
+    List<List<Object?>> sent(_Computer c) {
+      c.stamp();
+      c.engine.flush();
+      return c.engine.changesSince(0).values.expand((day) => day).toList();
+    }
+
+    // Each hears the other's first text before either hears the other's merge.
+    final (fromPc, fromLaptop) = (sent(pc), sent(laptop));
+    expect(pc.engine.merge(fromLaptop, 'laptop').keptBoth, {'2026-10-24'});
+    expect(laptop.engine.merge(fromPc, 'pc').keptBoth, {'2026-10-24'});
+    expect(pc.store.journal('2026-10-24'), laptop.store.journal('2026-10-24'));
+
+    _Computer.clock = 4000;
+    pc.store.setJournal('2026-10-24', 'A\n\n---\n\nB, and more');
+    pc.hearFrom(laptop);
+    laptop.hearFrom(pc);
+    expect(pc.store.journal('2026-10-24'), 'A\n\n---\n\nB, and more');
+    expect(pc.dump(), laptop.dump());
+  });
+
   test('a journal edited after seeing the other replaces it, without keeping both', () {
     join();
     _Computer.clock = 2000;

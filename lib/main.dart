@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -39,6 +40,7 @@ Future<void> main() async {
   );
   state.sync?.start();
   if (state.sync?.isOn ?? false) unawaited(state.sync!.run());
+  _watchWindow(state);
 
   if (state.firstRun) state.startTour();
   _watchDate(state);
@@ -85,7 +87,9 @@ void _watchDate(AppState state) {
       nextDayStart(now, state.dayStartHour),
     ].map((t) => t.difference(now)).reduce((a, b) => a < b ? a : b);
     // Just past the hour, so the clock has certainly turned.
-    final wait = until < const Duration(minutes: 1) ? until + const Duration(milliseconds: 20) : const Duration(minutes: 1);
+    final wait = until < const Duration(minutes: 1)
+        ? until + const Duration(milliseconds: 20)
+        : const Duration(minutes: 1);
     Timer(wait, () {
       check();
       schedule();
@@ -94,6 +98,29 @@ void _watchDate(AppState state) {
 
   schedule();
   AppLifecycleListener(onResume: check, onShow: check);
+}
+
+/// Syncs as the window comes and goes, so switching computers shows the
+/// latest: what changed here goes when the window goes to the back or is
+/// closed, and the others' changes come in when it comes back. Quitting
+/// waits a moment for sync, and saves typing first either way.
+void _watchWindow(AppState state) {
+  void leaving() {
+    state.saveJournalDraft();
+    state.sync?.sendChanges();
+  }
+
+  AppLifecycleListener(
+    onResume: () => state.sync?.refresh(),
+    onShow: () => state.sync?.refresh(),
+    onInactive: leaving,
+    onHide: leaving,
+    onExitRequested: () async {
+      state.saveJournalDraft();
+      await state.sync?.beforeQuit();
+      return AppExitResponse.exit;
+    },
+  );
 }
 
 /// Mirrors night light into [AppState]: hyprsunset can't announce a

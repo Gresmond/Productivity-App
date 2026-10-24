@@ -1055,6 +1055,41 @@ void main() {
     expect(find.text('Edit times'), findsOneWidget);
   });
 
+  testWidgets('the journal shows what syncs in where you are, and never over unsaved typing', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final store = _sheet();
+    final state = AppState(store, clock: () => DateTime(2026, 10, 23));
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+    final journal = find.byWidgetPredicate((w) => w is TextField && w.expands);
+    TextEditingController field() => tester.widget<TextField>(journal).controller!;
+
+    await tester.enterText(journal, 'Mine');
+    expect(store.journal('2026-10-23'), '', reason: 'saved once typing stops');
+
+    // A sync round: typing saved before the merge, the merge's text shown.
+    state.saveJournalDraft();
+    store.setJournal('2026-10-23', 'Theirs\n\n---\n\nMine');
+    state.notifyListeners();
+    await tester.pump();
+    expect(field().text, 'Theirs\n\n---\n\nMine');
+    expect(field().selection, const TextSelection.collapsed(offset: 17), reason: 'still after what you wrote');
+    expect(tester.widget<EditableText>(find.byType(EditableText).last).focusNode.hasFocus, isTrue);
+
+    // Typing not saved yet is newer than anything stored, so it stays.
+    await tester.enterText(journal, 'Typing');
+    store.setJournal('2026-10-23', 'Older');
+    state.notifyListeners();
+    await tester.pump();
+    expect(field().text, 'Typing');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(store.journal('2026-10-23'), 'Typing');
+  });
+
   testWidgets('the month view fits rituals and sleep schedule without scrolling', (tester) async {
     await _loadFonts();
     tester.view.devicePixelRatio = 1;
