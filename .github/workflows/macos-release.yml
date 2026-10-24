@@ -43,6 +43,22 @@ jobs:
           flutter-version: 3.47.7
           cache: true
 
+      # The sign-in client stays out of the repo (see .gitignore); its secret
+      # comes from the repo's GOOGLE_CLIENT_SECRET.
+      - name: Write Google sign-in client
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "::error title=No Google client secret::Add GOOGLE_CLIENT_SECRET under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          cat > lib/data/google_client.dart <<DART
+          const googleClientId = '972544414239-80se3hktkrmo65umjut0fvpj12nvsa9k.apps.googleusercontent.com';
+          const googleClientSecret = '$SECRET';
+          DART
+
       # On failure, repeat the error lines and the end of the output as
       # annotations, which (unlike the log) are visible without signing in.
       - name: Build app

@@ -50,3 +50,8 @@ app.*.map.json
 # Trial fonts copied from ~/.local/share/fonts. Only the files listed in
 # pubspec.yaml are committed (force-added); the rest stay local.
 /assets/fonts/
+
+# Eclipse's Google sign-in client, kept out of the public repo. Copy
+# google_client.example.dart to make it; the Mac release writes it from the
+# GOOGLE_CLIENT_SECRET secret.
+/lib/data/google_client.dart

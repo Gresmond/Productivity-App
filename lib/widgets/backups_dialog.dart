@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../data/backups.dart';
 import '../data/data_folder.dart';
+import '../data/google_drive.dart';
 import '../data/sync_service.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
@@ -24,71 +26,57 @@ class _BackupsDialogState extends State<BackupsDialog> {
   bool _restoring = false;
   String? _error;
 
-  /// rclone's remotes, once looked up; null while looking.
-  List<String>? _remotes;
-  String? _remote;
+  /// Waiting on the browser for sign-in, or looking in Drive after it.
+  bool _signingIn = false;
+  Completer<void>? _cancelSignIn;
 
-  /// Looking in the remote before turning sync on.
-  bool _looking = false;
+  /// Signed in to a Drive with another computer's data: waiting for a
+  /// yes to use it.
+  GoogleAccount? _joining;
 
-  /// The remote has another computer's data: waiting for a yes to use it.
-  bool _confirmJoin = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _findRemotes();
-  }
-
-  Future<void> _findRemotes() async {
-    setState(() => _remotes = null);
-    final remotes = await SyncService.remotes();
-    if (!mounted) return;
+  Future<void> _signIn(SyncService sync) async {
+    final cancel = _cancelSignIn = Completer<void>();
     setState(() {
-      _remotes = remotes;
-      _remote = remotes.contains(_remote) ? _remote : remotes.firstOrNull;
-    });
-  }
-
-  void _cancelJoin() => setState(() => _confirmJoin = false);
-
-  void _pickRemote(String? remote) => setState(() => _remote = remote);
-
-  String get _target => '${_remote!}Eclipse';
-
-  Future<void> _lookThenTurnOn(SyncService sync) async {
-    setState(() {
-      _looking = true;
+      _signingIn = true;
       _error = null;
     });
     try {
-      final others = await sync.look(_target);
+      final account = await sync.signIn(cancel: cancel.future);
+      final others = await sync.look(account);
       if (!mounted) return;
       if (others && !sync.hasSynced) {
         setState(() {
-          _looking = false;
-          _confirmJoin = true;
+          _signingIn = false;
+          _joining = account;
         });
         return;
       }
-      await sync.turnOn(_target, join: false);
+      await sync.turnOn(account, join: false);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Could not reach $_target: $e');
+      if (mounted && !cancel.isCompleted) setState(() => _error = '$e');
     }
-    if (mounted) setState(() => _looking = false);
+    if (mounted) setState(() => _signingIn = false);
   }
 
+  void _stopSigningIn() {
+    _cancelSignIn?.complete();
+    setState(() => _signingIn = false);
+  }
+
+  void _cancelJoin() => setState(() => _joining = null);
+
   Future<void> _join(SyncService sync) async {
+    final account = _joining!;
     setState(() {
-      _confirmJoin = false;
-      _looking = true;
+      _joining = null;
+      _signingIn = true;
     });
     try {
-      await sync.turnOn(_target, join: true);
+      await sync.turnOn(account, join: true);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Could not use $_target: $e');
+      if (mounted) setState(() => _error = '$e');
     }
-    if (mounted) setState(() => _looking = false);
+    if (mounted) setState(() => _signingIn = false);
   }
 
   /// A folder picked to keep everything in, waiting for a yes.
@@ -297,13 +285,10 @@ extension on _BackupsDialogState {
     );
   }
 
-  /// Keeping everything the same on your other computers, through Google
-  /// Drive by rclone.
+  /// Keeping everything the same on your other computers, through a
+  /// hidden folder in Google Drive.
   Widget _sync(Palette p, SyncService sync) {
     final small = TextStyle(fontFamily: Fonts.body, fontSize: 13, height: 1.45, color: p.inkMuted);
-    final code = TextStyle(fontFamily: Fonts.time, fontSize: 12, height: 1.6, color: p.ink);
-    final rclone = SyncService.findRclone() != null;
-    final remotes = _remotes;
 
     // Saying yes to sync wears the tick's colour, even before it can be pressed.
     Widget button(String label, VoidCallback? onTap, {bool filled = false}) => filled
@@ -336,7 +321,7 @@ extension on _BackupsDialogState {
       action = button('Sync now', sync.busy ? null : () => sync.run());
       body = [
         SelectableText(
-          sync.remote!,
+          'Signed in as ${sync.email}',
           maxLines: 1,
           style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.ink),
         ),
@@ -348,31 +333,11 @@ extension on _BackupsDialogState {
         ),
         Align(alignment: Alignment.centerRight, child: button('Turn off', sync.busy ? null : sync.turnOff)),
       ];
-    } else if (!rclone || remotes != null && remotes.isEmpty) {
-      action = button('Check again', remotes == null ? null : _findRemotes);
+    } else if (_joining case final account?) {
       body = [
         Text(
-          'Keep everything the same on your laptop or another computer, through Google Drive. '
-          '${rclone ? 'Connect' : 'Install rclone, then connect'} it to Google Drive once, in a terminal:',
-          style: small,
-        ),
-        const SizedBox(height: 8),
-        SelectableText(
-          '${rclone
-              ? ''
-              : Platform.isMacOS
-              ? 'brew install rclone\n'
-              : 'sudo pacman -S rclone\n'}rclone config',
-          style: code,
-        ),
-        const SizedBox(height: 4),
-        Text('In rclone config, make a new remote of type "drive" and sign in to Google.', style: small),
-      ];
-    } else if (_confirmJoin) {
-      body = [
-        Text(
-          '$_target already has Eclipse data from another computer. Replace everything on this computer with it? '
-          'This computer\'s data stays in today\'s backup above.',
+          'The Drive of ${account.email} already has Eclipse data from another computer. Replace everything on '
+          'this computer with it? This computer\'s data stays in today\'s backup above.',
           style: small.copyWith(color: p.ink),
         ),
         const SizedBox(height: 8),
@@ -386,37 +351,33 @@ extension on _BackupsDialogState {
         ),
       ];
     } else {
+      final why = sync.error;
       body = [
         Text(
-          'Keep everything the same on your laptop or another computer, through a folder in Google Drive. '
-          'Each computer sends its own changes, so both can be open at once.',
+          _signingIn
+              ? 'Finish signing in in your browser, then come back here.'
+              : 'Keep everything the same on your other computers: sign in with the same Google account on each. '
+                    'Eclipse keeps its data in a hidden folder in your Google Drive, and can\'t see anything else '
+                    'there.',
           style: small,
         ),
+        if (why != null && !_signingIn) ...[
+          const SizedBox(height: 4),
+          Text(why, style: small.copyWith(color: p.missed)),
+        ],
         const SizedBox(height: 8),
         Row(
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            if (remotes != null && remotes.length > 1)
-              DropdownButton<String>(
-                value: _remote,
-                underline: const SizedBox.shrink(),
-                style: TextStyle(fontFamily: Fonts.ui, fontSize: 13, color: p.ink),
-                dropdownColor: p.tile,
-                items: [for (final r in remotes) DropdownMenuItem(value: r, child: Text('${r}Eclipse'))],
-                onChanged: _looking ? null : _pickRemote,
-              )
-            else if (_remote != null)
-              Text(
-                _target,
-                style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.ink),
-              ),
-            const Spacer(),
-            if (_looking)
+            if (_signingIn) ...[
+              button('Cancel', _stopSigningIn),
+              const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: p.done)),
-              )
-            else
-              button('Turn on', _remote == null ? null : () => _lookThenTurnOn(sync), filled: true),
+              ),
+            ] else
+              button('Sign in with Google', () => _signIn(sync), filled: true),
           ],
         ),
       ];

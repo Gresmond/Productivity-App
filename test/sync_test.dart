@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:eclipse/data/google_drive.dart';
 import 'package:eclipse/data/store.dart';
 import 'package:eclipse/data/sync.dart';
+import 'package:eclipse/data/sync_service.dart';
 import 'package:eclipse/models.dart';
 
 /// Two computers, each with its own database, exchanging change files the
@@ -43,6 +45,32 @@ class _Computer {
       'sleep': rows('SELECT year, month, item, note FROM sleep_notes'),
       'settings': rows("SELECT key, value FROM settings WHERE key IN ('dayStartHour', 'restWeekends')"),
     };
+  }
+}
+
+/// One Google account's hidden Eclipse folder, in memory.
+class _FakeDrive implements SyncDrive {
+  final files = <String, (String, List<int>, int)>{}; // id: name, bytes, version
+  var _next = 0;
+  var signedOut = false;
+
+  void _check() {
+    if (signedOut) throw const DriveError('Google signed Eclipse out. Sign in again.', signedOut: true);
+  }
+
+  @override
+  Future<List<DriveFile>> list() async {
+    _check();
+    return [for (final MapEntry(:key, :value) in files.entries) DriveFile(id: key, name: value.$1, modified: '${value.$3}')];
+  }
+
+  @override
+  Future<List<int>> download(String id) async => files[id]!.$2;
+
+  @override
+  Future<void> upload(String name, List<int> bytes, {String? id}) async {
+    _check();
+    files[id ?? 'f${_next++}'] = (name, bytes, _next++);
   }
 }
 
@@ -226,5 +254,61 @@ void main() {
   test('the sleep schedule has the same ids on every computer', () {
     final sleep = pc.store.raw.select("SELECT uid FROM habits WHERE uid LIKE 'sleep-%'");
     expect(sleep, hasLength(SleepItem.values.length));
+  });
+
+  group('through Google Drive', () {
+    late Directory dir;
+    late _FakeDrive drive;
+    const account = GoogleAccount(email: 'me@example.com', refreshToken: 'lasting');
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('eclipse-drive');
+      drive = _FakeDrive();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    SyncService service(_Computer c) {
+      final home = Directory('${dir.path}/${c.name}')..createSync();
+      return SyncService.load(home, c.store, connect: (_) => drive, signIn: ({cancel}) async => account);
+    }
+
+    test('the first computer starts it, the next joins, and edits go both ways', () async {
+      final onPc = service(pc), onLaptop = service(laptop);
+      expect(await onPc.look(await onPc.signIn()), isFalse, reason: 'nothing there yet');
+      await onPc.turnOn(account, join: false);
+      expect(onPc.email, 'me@example.com');
+      expect(drive.files, isNotEmpty);
+
+      expect(await onLaptop.look(account), isTrue);
+      await onLaptop.turnOn(account, join: true);
+      expect(laptop.dump(), pc.dump());
+
+      laptop.store.setJournal('2026-10-24', 'Written on the laptop');
+      await onLaptop.run();
+      await onPc.run();
+      expect(pc.store.journal('2026-10-24'), 'Written on the laptop');
+      expect(onPc.lastIncoming?.changes, greaterThan(0));
+      expect(pc.dump(), laptop.dump());
+
+      // Files already copied aren't copied again.
+      final versions = {for (final f in drive.files.values) f.$1: f.$3};
+      await onPc.run();
+      await onLaptop.run();
+      expect({for (final f in drive.files.values) f.$1: f.$3}, versions);
+      onPc.dispose();
+      onLaptop.dispose();
+    });
+
+    test('a sign-in Google takes back turns sync off, saying so', () async {
+      final onPc = service(pc);
+      await onPc.look(account);
+      await onPc.turnOn(account, join: false);
+      drive.signedOut = true;
+      await onPc.run();
+      expect(onPc.isOn, isFalse);
+      expect(onPc.error, contains('Sign in again'));
+      expect(service(pc).isOn, isFalse, reason: 'remembered after a restart');
+      onPc.dispose();
+    });
   });
 }
