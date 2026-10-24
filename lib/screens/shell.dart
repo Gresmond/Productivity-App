@@ -616,7 +616,22 @@ class _SettingsButton extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final p = context.palette;
-    final restored = await showDialog<Backup>(context: context, builder: (_) => const SettingsDialog());
+    final restored = await showGeneralDialog<Backup>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: Motion.morph,
+      pageBuilder: (_, _, _) => const SettingsDialog(),
+      // The fade menus' open: fades in while growing from 96%.
+      transitionBuilder: (_, animation, _, child) {
+        final t = CurvedAnimation(parent: animation, curve: Motion.morphCurve);
+        return FadeTransition(
+          opacity: t,
+          child: ScaleTransition(scale: t.drive(Tween(begin: 0.96, end: 1.0)), child: child),
+        );
+      },
+    );
     if (restored == null || !context.mounted) return;
     final from = restored.isBeforeRestore
         ? 'how things were before your last restore'
