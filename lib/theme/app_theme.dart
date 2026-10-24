@@ -144,6 +144,9 @@ final morningPastelPalette = const PaletteRecipe(
   statusChroma: 0.095,
   statusLightness: 0.78,
   harmony: Harmony.triadic,
+  // Cyan holds far more colour than blue at this lightness; this keeps
+  // today as soft as the statuses look.
+  todayChroma: 0.06,
 ).build();
 
 final eveningPastelPalette = const PaletteRecipe(
@@ -156,6 +159,9 @@ final eveningPastelPalette = const PaletteRecipe(
   statusChroma: 0.09,
   statusLightness: 0.76,
   harmony: Harmony.triadic,
+  // Cyan holds far more colour than blue at this lightness; this keeps
+  // today as soft as the statuses look.
+  todayChroma: 0.06,
 ).build();
 
 final sunrisePalette = const PaletteRecipe(
@@ -264,9 +270,18 @@ ThemeData buildTheme(Palette p) {
       textStyle: TextStyle(fontFamily: Fonts.body, color: p.tile, fontSize: 13),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     ),
+    // Flutter's buttons keep the arrow on desktop; everything clickable
+    // here shows the hand.
+    iconButtonTheme: const IconButtonThemeData(style: _clickable),
+    textButtonTheme: const TextButtonThemeData(style: _clickable),
+    filledButtonTheme: const FilledButtonThemeData(style: _clickable),
+    outlinedButtonTheme: const OutlinedButtonThemeData(style: _clickable),
+    elevatedButtonTheme: const ElevatedButtonThemeData(style: _clickable),
     extensions: [p],
   );
 }
+
+const _clickable = ButtonStyle(mouseCursor: WidgetStateMouseCursor.clickable);
 
 extension PaletteContext on BuildContext {
   Palette get palette => Theme.of(this).extension<Palette>()!;

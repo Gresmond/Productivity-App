@@ -60,6 +60,7 @@ class PaletteRecipe {
     this.vivid = false,
     this.softness = 0,
     this.surfaceLift = 0,
+    this.todayChroma,
   });
 
   final String name;
@@ -84,6 +85,11 @@ class PaletteRecipe {
   /// in OKLCH lightness: a dusk rather than a midnight.
   final double surfaceLift;
 
+  /// Today's chroma, when it shouldn't share [statusChroma]: cyan can hold
+  /// far more colour than blue or pink at a pastel's lightness, so the
+  /// shared chroma that is gentle on them turns it neon.
+  final double? todayChroma;
+
   PaletteRecipe withHarmony(Harmony harmony) => PaletteRecipe(
         name: name,
         brightness: brightness,
@@ -97,6 +103,7 @@ class PaletteRecipe {
         vivid: vivid,
         softness: softness,
         surfaceLift: surfaceLift,
+        todayChroma: todayChroma,
       );
 
   bool get _dark => brightness == Brightness.dark;
@@ -115,8 +122,8 @@ class PaletteRecipe {
 
   Palette build() {
     final (doneHue, missedHue, otherHue) = statusHues;
-    Color status(double hue, double step) {
-      if (!vivid) return Oklch(statusLightness + step * lightnessSpread / 2, statusChroma, hue).toColor();
+    Color status(double hue, double step, [double? chroma]) {
+      if (!vivid) return Oklch(statusLightness + step * lightnessSpread / 2, chroma ?? statusChroma, hue).toColor();
       final cusp = Oklch.cusp(hue);
       // Softening pulls the cusps together, so the lightness step still
       // applies.
@@ -131,7 +138,7 @@ class PaletteRecipe {
     // three, else the darkest ink.
     final white = const Color(0xFFFFFFFF);
     final onAccent = [done, missed, other].every((c) => contrast(white, c) >= 3) ? white : _neutral(0.22, 2);
-    final today = status(turn(keyHue, harmony.today), 2);
+    final today = status(turn(keyHue, harmony.today), 2, todayChroma);
     final darkInk = _neutral(0.22, 2);
     // A vivid theme's accent takes whichever status hue keeps the most
     // chroma at the accent's lightness, so dark gold text never turns brown.

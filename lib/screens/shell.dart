@@ -7,7 +7,8 @@ import '../data/backups.dart';
 import '../data/updates.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
-import '../widgets/backups_dialog.dart';
+import '../widgets/setting_rows.dart';
+import '../widgets/settings_dialog.dart';
 import '../widgets/fade_menu.dart';
 import '../widgets/fade_through.dart';
 import '../widgets/sync_banner.dart';
@@ -194,7 +195,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 14),
           _YearSwitcher(year: state.viewYear),
           const SizedBox(width: 10),
-          const _BackupsButton(),
+          const TourTarget(spot: TourSpot.settings, child: _SettingsButton()),
           const SizedBox(width: 10),
           const TourTarget(spot: TourSpot.appearance, child: _ThemeButton()),
         ],
@@ -454,9 +455,9 @@ class _TabBarState extends State<_TabBar> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(30),
-                gradient: LinearGradient(colors: p.gradient),
+                color: p.done,
                 boxShadow: [
-                  BoxShadow(color: p.gradient[1].withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3)),
+                  BoxShadow(color: p.done.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3)),
                 ],
               ),
             ),
@@ -609,13 +610,13 @@ class _YearSwitcher extends StatelessWidget {
   }
 }
 
-/// Opens the backups list; confirms a restore once it's done.
-class _BackupsButton extends StatelessWidget {
-  const _BackupsButton();
+/// Opens Settings; confirms a restore once it's done.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton();
 
   Future<void> _open(BuildContext context) async {
     final p = context.palette;
-    final restored = await showDialog<Backup>(context: context, builder: (_) => const BackupsDialog());
+    final restored = await showDialog<Backup>(context: context, builder: (_) => const SettingsDialog());
     if (restored == null || !context.mounted) return;
     final from = restored.isBeforeRestore
         ? 'how things were before your last restore'
@@ -640,12 +641,13 @@ class _BackupsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Tooltip(
-      message: 'Backups and sync',
+      message: 'Settings',
       child: Material(
         color: Colors.transparent,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
+          mouseCursor: SystemMouseCursors.click,
           onTap: () => _open(context),
           child: Container(
             width: 46,
@@ -662,7 +664,7 @@ class _BackupsButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(Icons.history_rounded, size: 21, color: p.inkMuted),
+            child: Icon(Icons.settings_rounded, size: 21, color: p.inkMuted),
           ),
         ),
       ),
@@ -670,8 +672,8 @@ class _BackupsButton extends StatelessWidget {
   }
 }
 
-/// Round swatch of the current theme; opens a menu of all themes, the
-/// rest-weekends switch and when a new day starts.
+/// Round swatch of the current theme; opens a menu of all themes and
+/// whether to follow night light.
 class _ThemeButton extends StatelessWidget {
   const _ThemeButton();
 
@@ -706,8 +708,8 @@ class _ThemeButton extends StatelessWidget {
   }
 }
 
-/// The appearance menu's contents. Picking a theme closes it; the switches
-/// and the day-start pill flip in place, so you see them move.
+/// The appearance menu's contents. Picking a theme closes it; the switch
+/// flips in place, so you see it move.
 class _AppearanceMenu extends StatelessWidget {
   const _AppearanceMenu();
 
@@ -757,8 +759,7 @@ class _AppearanceMenu extends StatelessWidget {
           ),
         if (state.nightLightAvailable) ...[
           const FadeMenuDivider(),
-          _switchRow(
-            p,
+          SettingSwitchRow(
             title: Platform.isMacOS ? 'Follow Dark mode' : 'Follow night light',
             subtitle: Platform.isMacOS
                 ? 'Its dark partner while macOS is in Dark mode.'
@@ -767,216 +768,7 @@ class _AppearanceMenu extends StatelessWidget {
             onTap: () => state.setFollowNightLight(!state.followNightLight),
           ),
         ],
-        const FadeMenuDivider(),
-        _switchRow(
-          p,
-          title: 'Weekends as rest days',
-          subtitle: "Greyed out. A blank one won't break a streak.",
-          on: state.restWeekends,
-          onTap: () => state.setRestWeekends(!state.restWeekends),
-        ),
-        const FadeMenuDivider(),
-        const _DayStartEntry(),
-        const FadeMenuDivider(),
-        FadeMenuRow(
-          height: 50,
-          onTap: () {
-            Navigator.pop(context);
-            state.startTour();
-          },
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Show the welcome tour',
-                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
-                ),
-              ),
-              Icon(Icons.arrow_forward_rounded, size: 18, color: p.inkMuted),
-            ],
-          ),
-        ),
       ],
-    );
-  }
-
-  Widget _switchRow(
-    Palette p, {
-    required String title,
-    required String subtitle,
-    required bool on,
-    required VoidCallback onTap,
-  }) {
-    return FadeMenuRow(
-      height: 60,
-      onTap: onTap,
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.inkMuted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          _Toggle(on: on),
-        ],
-      ),
-    );
-  }
-}
-
-/// Picks the hour a new day starts. The menu stays open while you choose,
-/// since picking just moves the highlight.
-class _DayStartEntry extends StatefulWidget {
-  const _DayStartEntry();
-
-  static const hours = [0, 4];
-
-  @override
-  State<_DayStartEntry> createState() => _DayStartEntryState();
-}
-
-class _DayStartEntryState extends State<_DayStartEntry> {
-  /// Where the pill sits for [hour]: its left edge and width, as fractions.
-  static Offset _pillAt(int hour) {
-    const hours = _DayStartEntry.hours;
-    return Offset(hours.indexOf(hour) / hours.length, 1 / hours.length);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final state = AppScope.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'New day starts at',
-            style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w500, color: p.ink),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Before then, ticks count for the day before.',
-            style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.inkMuted),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(20)),
-            // One pill glides to the chosen hour, like the tab bar's.
-            child: Stack(
-              children: [
-                if (_DayStartEntry.hours.contains(state.dayStartHour))
-                  Positioned.fill(
-                    child: TweenAnimationBuilder<Offset>(
-                      tween: Tween(end: _pillAt(state.dayStartHour)),
-                      duration: Motion.morph,
-                      curve: Motion.morphCurve,
-                      builder: (context, pill, _) => Align(
-                        // pill.dx is the left edge and pill.dy the width, as
-                        // fractions of the row.
-                        alignment: Alignment(pill.dy >= 1 ? 0 : 2 * pill.dx / (1 - pill.dy) - 1, 0),
-                        child: FractionallySizedBox(
-                          widthFactor: pill.dy,
-                          heightFactor: 1,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(17),
-                              gradient: LinearGradient(colors: p.gradient.skip(1).toList()),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                Row(
-                  children: [
-                    for (final hour in _DayStartEntry.hours)
-                      Expanded(
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => state.setDayStartHour(hour),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Center(
-                                child: AnimatedDefaultTextStyle(
-                                  duration: Motion.morph,
-                                  curve: Motion.morphCurve,
-                                  style: TextStyle(
-                                    fontFamily: Fonts.ui,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: hour == state.dayStartHour ? p.onAccent : p.inkMuted,
-                                  ),
-                                  child: Text(hourLabel(hour)),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A small switch, drawn to match the app rather than Material's.
-class _Toggle extends StatelessWidget {
-  const _Toggle({required this.on});
-
-  final bool on;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    // Slides and fills as it flips; colours come from the palette each
-    // frame, so a theme change recolours it in step with everything else.
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: on ? 1 : 0),
-      duration: Motion.click,
-      curve: Motion.clickCurve,
-      builder: (context, t, _) => Container(
-        width: 36,
-        height: 22,
-        padding: const EdgeInsets.all(3),
-        alignment: Alignment.lerp(Alignment.centerLeft, Alignment.centerRight, t),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(11),
-          gradient: LinearGradient(colors: [for (final c in p.gradient.skip(1)) Color.lerp(p.empty, c, t)!]),
-          border: Border.all(color: p.tileBorder.withValues(alpha: 1 - t)),
-        ),
-        child: Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            color: Color.lerp(p.tile, p.onAccent, t),
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: p.shadow.withValues(alpha: 0.2), blurRadius: 3, offset: const Offset(0, 1))],
-          ),
-        ),
-      ),
     );
   }
 }

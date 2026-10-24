@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 import 'fade_through.dart';
 
 /// The parts of the app the welcome tour points at.
-enum TourSpot { rituals, sleep, todayTodos, laterTodos, journal, date, tabs, appearance }
+enum TourSpot { rituals, sleep, todayTodos, laterTodos, journal, date, tabs, settings, appearance }
 
 /// Marks [child] as [spot] for the welcome tour to find. Several may share
 /// a spot; the tour lights them up as one.
@@ -116,12 +116,17 @@ List<_Step> _steps(AppState state) => [
         "month's percentages side by side.",
     TourSpot.tabs,
   ),
+  const _Step(
+    'Settings',
+    'Rest on weekends, choose whether a new day starts at midnight or 4am, and pick '
+        'where the journal is saved. Backups and sync are here too, and so is this tour, '
+        'whenever you want it again.',
+    TourSpot.settings,
+  ),
   _Step(
     'Appearance',
-    'Pick a theme; each one comes in a light and dark pair. '
-        '${state.nightLightAvailable ? 'Follow night light switches to the dark one when night light comes on. ' : ''}'
-        'You can also rest on weekends, and choose whether a new day starts at midnight '
-        'or 4am. This tour is in here too, whenever you want it again.',
+    'Pick a theme; each one comes in a light and dark pair.'
+        '${state.nightLightAvailable ? ' Follow night light switches to the dark one when night light comes on.' : ''}',
     TourSpot.appearance,
   ),
 ];

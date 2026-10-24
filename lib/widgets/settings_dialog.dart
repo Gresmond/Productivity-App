@@ -10,17 +10,24 @@ import '../data/google_drive.dart';
 import '../data/sync_service.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'fade_menu.dart';
+import 'fade_through.dart';
+import 'setting_rows.dart';
 
-/// Lists the saved copies; restoring one asks first, inline on its row.
-/// Pops with the restored [Backup], or nothing.
-class BackupsDialog extends StatefulWidget {
-  const BackupsDialog({super.key});
+/// Settings, in two ribbons: General, and Backups and sync. Restoring a
+/// backup asks first, inline on its row. Pops with the restored [Backup],
+/// or nothing.
+class SettingsDialog extends StatefulWidget {
+  const SettingsDialog({super.key});
 
   @override
-  State<BackupsDialog> createState() => _BackupsDialogState();
+  State<SettingsDialog> createState() => _SettingsDialogState();
 }
 
-class _BackupsDialogState extends State<BackupsDialog> {
+class _SettingsDialogState extends State<SettingsDialog> {
+  /// 0 for General, 1 for Backups and sync. Always opens on General.
+  int _ribbon = 0;
+
   late List<Backup> _backups = AppScope.of(context).backups?.list() ?? [];
   Backup? _confirming;
   bool _restoring = false;
@@ -112,6 +119,39 @@ class _BackupsDialogState extends State<BackupsDialog> {
     }
   }
 
+  /// A folder picked for the journal, waiting for a yes.
+  Directory? _newJournal;
+
+  Future<void> _pickJournal() async {
+    final state = AppScope.of(context);
+    final current = state.journalFiles!.dir;
+    final folder = await DataFolder.pick(start: current.parent.path, title: 'Save journal entries in');
+    if (folder == null || !mounted) return;
+    setState(() {
+      _newJournal = folder.path == current.path ? null : folder;
+      _error = null;
+    });
+  }
+
+  void _cancelJournalMove() => setState(() => _newJournal = null);
+
+  /// Asks, on its row, whether to restore [b]; null stops asking.
+  void _ask(Backup? b) => setState(() => _confirming = b);
+
+  void _moveJournal() {
+    final folder = _newJournal!;
+    try {
+      AppScope.of(context).useJournalFolder(folder);
+      setState(() => _newJournal = null);
+    } on FileSystemException catch (e) {
+      setState(() {
+        _newJournal = null;
+        _error = 'Some entries couldn\'t be moved, so they\'re still in the old folder '
+            '(${e.osError?.message ?? e.message}). New entries are saved in ${_shortPath(folder.path)}.';
+      });
+    }
+  }
+
   Future<void> _restore(Backup b) async {
     setState(() {
       _restoring = true;
@@ -131,7 +171,6 @@ class _BackupsDialogState extends State<BackupsDialog> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final state = AppScope.of(context);
     return Dialog(
       backgroundColor: p.tile,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -144,62 +183,38 @@ class _BackupsDialogState extends State<BackupsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'BACKUPS',
-                style: TextStyle(fontSize: 11, letterSpacing: 1.4, color: p.accent, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Restore a copy',
-                style: TextStyle(fontFamily: Fonts.display, fontSize: 28, color: p.ink),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'A copy of everything is saved each day you use the app, and the last 30 are kept.',
-                style: TextStyle(fontFamily: Fonts.body, fontSize: 14, height: 1.45, color: p.inkMuted),
-              ),
-              const SizedBox(height: 18),
-              if (_backups.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
+              Row(
+                children: [
+                  Expanded(
                     child: Text(
-                      'No backups yet.',
-                      style: TextStyle(fontFamily: Fonts.body, fontSize: 15, color: p.inkMuted),
+                      'Settings',
+                      style: TextStyle(fontFamily: Fonts.display, fontSize: 28, color: p.ink),
                     ),
                   ),
-                )
-              else
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 380),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _backups.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
-                    itemBuilder: (_, i) => _BackupRow(
-                      backup: _backups[i],
-                      today: state.today,
-                      confirming: _confirming == _backups[i],
-                      restoring: _restoring && _confirming == _backups[i],
-                      enabled: !_restoring,
-                      onAsk: () => setState(() => _confirming = _backups[i]),
-                      onCancel: () => setState(() => _confirming = null),
-                      onConfirm: () => _restore(_backups[i]),
-                    ),
+                  _Ribbons(
+                    labels: const ['General', 'Backups and sync'],
+                    selected: _ribbon,
+                    onSelect: (i) => setState(() {
+                      _ribbon = i;
+                      _error = null;
+                    }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              AnimatedSize(
+                duration: Motion.morph,
+                curve: Motion.morphCurve,
+                alignment: Alignment.topCenter,
+                child: FadeThrough(
+                  layoutBuilder: (current, previous) =>
+                      Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
+                  child: KeyedSubtree(
+                    key: ValueKey(_ribbon),
+                    child: _ribbon == 0 ? _general(p) : _backupsAndSync(p),
                   ),
                 ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.missed),
-                ),
-              ],
-              if (state.dataFolder != null) ...[const SizedBox(height: 18), _dataFolder(p, state.dataFolder!)],
-              if (state.sync != null) ...[
-                const SizedBox(height: 10),
-                ListenableBuilder(listenable: state.sync!, builder: (context, _) => _sync(p, state.sync!)),
-              ],
+              ),
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -218,7 +233,192 @@ class _BackupsDialogState extends State<BackupsDialog> {
   }
 }
 
-extension on _BackupsDialogState {
+extension on _SettingsDialogState {
+  /// The journal's folder, then what used to sit in the appearance menu.
+  Widget _general(Palette p) {
+    final state = AppScope.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.journalFiles != null) ...[_journalFolder(p, state.journalFiles!.dir), const SizedBox(height: 10)],
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: ColoredBox(
+            color: p.empty.withValues(alpha: 0.45),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 4),
+                SettingSwitchRow(
+                  title: 'Weekends as rest days',
+                  subtitle: "Greyed out. A blank one won't break a streak.",
+                  on: state.restWeekends,
+                  onTap: () => state.setRestWeekends(!state.restWeekends),
+                ),
+                const FadeMenuDivider(),
+                const DayStartPicker(),
+                const FadeMenuDivider(),
+                FadeMenuRow(
+                  height: 50,
+                  onTap: () {
+                    Navigator.pop(context);
+                    state.startTour();
+                  },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Show the welcome tour',
+                          style: TextStyle(
+                            fontFamily: Fonts.ui,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: p.ink,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_rounded, size: 18, color: p.inkMuted),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Where each day's entry is saved as a file, and a way to move them.
+  Widget _journalFolder(Palette p, Directory current) {
+    final folder = _newJournal;
+    final small = TextStyle(fontFamily: Fonts.body, fontSize: 13, height: 1.45, color: p.inkMuted);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Journal folder',
+                  style: TextStyle(fontFamily: Fonts.ui, fontSize: 14, fontWeight: FontWeight.w600, color: p.ink),
+                ),
+              ),
+              if (folder == null)
+                TextButton(
+                  onPressed: _pickJournal,
+                  child: Text('Change…', style: TextStyle(color: p.accent)),
+                ),
+            ],
+          ),
+          SelectableText(
+            _shortPath(current.path),
+            maxLines: 1,
+            style: TextStyle(fontFamily: Fonts.ui, fontSize: 12, color: p.ink),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Each day's entry is saved here as a file you can open without Eclipse. "
+            'This computer only: your other computers keep their own folder.',
+            style: small,
+          ),
+          if (folder != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Move your entries to ${_shortPath(folder.path)} and save new ones there?',
+              style: small.copyWith(color: p.ink),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _cancelJournalMove,
+                  child: Text('Cancel', style: TextStyle(color: p.inkMuted)),
+                ),
+                const SizedBox(width: 4),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: p.accent, foregroundColor: p.onAccent),
+                  onPressed: _moveJournal,
+                  child: const Text('Move'),
+                ),
+              ],
+            ),
+          ],
+          if (_error != null && _ribbon == 0) ...[
+            const SizedBox(height: 8),
+            Text(_error!, style: small.copyWith(color: p.missed)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Saved copies to restore, where everything lives, and sync.
+  Widget _backupsAndSync(Palette p) {
+    final state = AppScope.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Restore a copy',
+          style: TextStyle(fontFamily: Fonts.ui, fontSize: 16, fontWeight: FontWeight.w600, color: p.ink),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'A copy of everything is saved each day you use the app, and the last 30 are kept.',
+          style: TextStyle(fontFamily: Fonts.body, fontSize: 14, height: 1.45, color: p.inkMuted),
+        ),
+        const SizedBox(height: 14),
+        if (_backups.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text(
+                'No backups yet.',
+                style: TextStyle(fontFamily: Fonts.body, fontSize: 15, color: p.inkMuted),
+              ),
+            ),
+          )
+        else
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 380),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _backups.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 6),
+              itemBuilder: (_, i) => _BackupRow(
+                backup: _backups[i],
+                today: state.today,
+                confirming: _confirming == _backups[i],
+                restoring: _restoring && _confirming == _backups[i],
+                enabled: !_restoring,
+                onAsk: () => _ask(_backups[i]),
+                onCancel: () => _ask(null),
+                onConfirm: () => _restore(_backups[i]),
+              ),
+            ),
+          ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            _error!,
+            style: TextStyle(fontFamily: Fonts.body, fontSize: 13.5, color: p.missed),
+          ),
+        ],
+        if (state.dataFolder != null) ...[const SizedBox(height: 18), _dataFolder(p, state.dataFolder!)],
+        if (state.sync != null) ...[
+          const SizedBox(height: 10),
+          ListenableBuilder(listenable: state.sync!, builder: (context, _) => _sync(p, state.sync!)),
+        ],
+      ],
+    );
+  }
+
   /// Where everything lives, and a way to keep it somewhere else (a synced
   /// folder, say) so it follows you to a new computer.
   Widget _dataFolder(Palette p, DataFolder data) {
@@ -253,7 +453,7 @@ extension on _BackupsDialogState {
           const SizedBox(height: 4),
           Text(
             'Every day, ritual, to-do and journal entry since you started is kept here'
-            '${data.chosen == null ? ' (the journal in ${_shortPath(data.journal.path)})' : ''}. '
+            '${data.journal.path.startsWith(data.root.path) ? '' : ' (the journal in ${_shortPath(data.journal.path)})'}. '
             'Uninstalling the app leaves it in place.',
             style: small,
           ),
@@ -421,10 +621,11 @@ extension on _BackupsDialogState {
     };
   }
 
-  static String _shortPath(String path) {
-    final home = Platform.environment['HOME'];
-    return home != null && path.startsWith(home) ? '~${path.substring(home.length)}' : path;
-  }
+}
+
+String _shortPath(String path) {
+  final home = Platform.environment['HOME'];
+  return home != null && path.startsWith(home) ? '~${path.substring(home.length)}' : path;
 }
 
 class _BackupRow extends StatelessWidget {
@@ -533,5 +734,73 @@ class _BackupRow extends StatelessWidget {
       _ => '$days days ago',
     };
     return (title, ago);
+  }
+}
+
+/// The ribbons along the top of Settings: one pill, in the done colour like
+/// the tab bar's, glides to the chosen one.
+class _Ribbons extends StatelessWidget {
+  const _Ribbons({required this.labels, required this.selected, required this.onSelect});
+
+  final List<String> labels;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: 270,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: p.empty.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(20)),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedAlign(
+              duration: Motion.morph,
+              curve: Motion.morphCurve,
+              alignment: Alignment(labels.length == 1 ? 0 : -1 + 2 * selected / (labels.length - 1), 0),
+              child: FractionallySizedBox(
+                widthFactor: 1 / labels.length,
+                heightFactor: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(17), color: p.done),
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              for (final (i, label) in labels.indexed)
+                Expanded(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onSelect(i),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 7),
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: Motion.morph,
+                            curve: Motion.morphCurve,
+                            style: TextStyle(
+                              fontFamily: Fonts.ui,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: i == selected ? p.onAccent : p.inkMuted,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

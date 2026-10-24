@@ -87,6 +87,20 @@ class AppState extends ChangeNotifier {
   /// Reopens the app; null in tests.
   final Future<void> Function()? restart;
 
+  /// Keeps the journal's files in [folder] from now on, on this computer,
+  /// and moves the ones already saved there. Throws if some couldn't be
+  /// moved; the folder is switched all the same, and those stay put.
+  void useJournalFolder(Directory folder) {
+    final files = journalFiles!;
+    saveJournalDraft();
+    final old = files.dir;
+    dataFolder?.useJournal(folder);
+    files.dir = folder;
+    journalFileProblem = null;
+    notifyListeners();
+    JournalFiles(old).moveTo(folder);
+  }
+
   /// Keeps everything in [folder] from now on, copying it there unless the
   /// folder already has data, then reopens the app on it.
   Future<void> useDataFolder(Directory folder) async {

@@ -451,6 +451,39 @@ void main() {
     moved.close();
   });
 
+  test('choosing a journal folder moves the entries there, on this computer only', () {
+    final tmp = Directory.systemTemp.createTempSync('productivity_journal');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final home = Directory('${tmp.path}/home')..createSync();
+    final docs = Directory('${tmp.path}/docs')..createSync();
+    final data = DataFolder.load(home, docs);
+    final old = data.journal;
+    final state = AppState(
+      Store.memory(),
+      journalFiles: JournalFiles(old),
+      dataFolder: data,
+      clock: () => DateTime(2026, 10, 24),
+    );
+    state.setJournal(DateTime(2026, 10, 23), 'Friday.');
+    state.setJournal(DateTime(2026, 10, 24), 'Saturday.');
+    File('${old.path}/notes.txt').writeAsStringSync('mine');
+
+    final chosen = Directory('${tmp.path}/Notes/Journal');
+    state.useJournalFolder(chosen);
+    expect(File('${chosen.path}/2026/2026-10-23.md').readAsStringSync(), contains('Friday.'));
+    expect(File('${old.path}/2026').existsSync(), isFalse, reason: 'moved, not copied');
+    expect(File('${old.path}/notes.txt').readAsStringSync(), 'mine', reason: 'other files stay put');
+
+    state.setJournal(DateTime(2026, 10, 25), 'Sunday.');
+    expect(File('${chosen.path}/2026/2026-10-25.md').existsSync(), isTrue);
+    expect(DataFolder.load(home, docs).journal.path, chosen.path, reason: 'remembered for next time');
+    expect(
+      DataFolder.load(Directory('${tmp.path}/home2')..createSync(), docs).journal.path,
+      old.path,
+      reason: 'another computer keeps its own',
+    );
+  });
+
   group('carry-forward', () {
     test('unfinished to-dos roll into the new day, week and month', () {
       var now = DateTime(2026, 10, 23, 22); // Friday
@@ -931,7 +964,10 @@ void main() {
 
     await tester.pumpWidget(EclipseApp(state: state));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Backups and sync'));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Weekends as rest days'), findsOneWidget, reason: 'Settings opens on General');
+    await tester.tap(find.text('Backups and sync'));
     await tester.pumpAndSettle();
     expect(find.text('Friday 23 October'), findsOneWidget);
     expect(find.text('Yesterday'), findsOneWidget);
@@ -1140,15 +1176,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('SATURDAY'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Appearance'));
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('4am'));
     await tester.pumpAndSettle();
     expect(state.dayStartHour, 4);
-    expect(find.text('New day starts at'), findsOneWidget, reason: 'the menu stays open');
-    await _shoot(tester, 'day_start_menu');
+    expect(find.text('New day starts at'), findsOneWidget, reason: 'Settings stays open');
+    await _shoot(tester, 'day_start_settings');
 
-    await tester.tapAt(const Offset(200, 600)); // closes the menu
+    await tester.tapAt(const Offset(20, 880)); // closes Settings
     await tester.pumpAndSettle();
     expect(state.today, DateTime(2026, 10, 23));
     expect(find.text('SATURDAY'), findsNothing);
@@ -1525,15 +1561,15 @@ void main() {
     await tester.tap(find.text('Jan').first, warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(state.viewMonth, isNull);
-    for (var i = 1; i < 9; i++) {
+    for (var i = 1; i < 10; i++) {
       await _shoot(tester, 'tour_$i');
-      await tester.tap(find.text(i == 8 ? 'Get started' : 'Next'));
+      await tester.tap(find.text(i == 9 ? 'Get started' : 'Next'));
       await tester.pumpAndSettle();
     }
     expect(state.touring, isFalse);
     expect(find.text('Get started'), findsNothing);
 
-    await tester.tap(find.byTooltip('Appearance'));
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Show the welcome tour'));
     await tester.pumpAndSettle();
@@ -1575,11 +1611,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(state.themeName, 'Morning Pastel');
 
-    await tester.tap(find.byTooltip('Appearance'));
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Weekends as rest days'));
     await tester.pumpAndSettle();
     expect(state.restWeekends, isTrue);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
     state.showMonth(10);
     await tester.pumpAndSettle();
     await _shoot(tester, 'rest_weekends_month');
@@ -1595,5 +1633,91 @@ void main() {
       await tester.pumpAndSettle();
       await _shoot(tester, 'theme_${slug}_month');
     }
+  });
+  testWidgets('everything clickable shows the click cursor', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final state = AppState(_sheet(), clock: () => DateTime(2026, 10, 23));
+    state.addTodo(TodoScope.today, 'Tick this off');
+    state.addTodo(TodoScope.week, 'Book dentist');
+    await tester.pumpWidget(EclipseApp(state: state));
+    await tester.pumpAndSettle();
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse, pointer: 1);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    final missing = <String>[];
+
+    // Hovers each tappable thing that's on screen and not covered, and
+    // notes any that keep the arrow.
+    Future<void> sweep(String where) async {
+      final tappable = find.byWidgetPredicate(
+        (w) => switch (w) {
+          GestureDetector() => w.onTap != null || w.onDoubleTap != null || w.onSecondaryTap != null,
+          InkWell() => w.onTap != null,
+          ButtonStyleButton() => w.onPressed != null,
+          IconButton() => w.onPressed != null,
+          _ => false,
+        },
+      ).hitTestable();
+      for (final element in tappable.evaluate().toList()) {
+        final box = element.renderObject! as RenderBox;
+        if (!box.attached) continue;
+        await mouse.moveTo(box.localToGlobal(box.size.center(Offset.zero)));
+        await tester.pump();
+        final cursor = RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1);
+        if (cursor != SystemMouseCursors.click) {
+          final label = find
+              .descendant(of: find.byElementPredicate((e) => e == element), matching: find.byType(Text))
+              .evaluate()
+              .map((e) => (e.widget as Text).data)
+              .firstOrNull;
+          final icon = find
+              .descendant(of: find.byElementPredicate((e) => e == element), matching: find.byType(Icon))
+              .evaluate()
+              .map((e) => (e.widget as Icon).icon)
+              .firstOrNull;
+          missing.add('$where: ${element.widget.runtimeType} ${label ?? icon ?? ''} shows $cursor');
+        }
+      }
+      await mouse.moveTo(Offset.zero);
+      await tester.pumpAndSettle();
+    }
+
+    await sweep('Today');
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await sweep('Settings, General');
+    await tester.tap(find.text('Backups and sync'));
+    await tester.pumpAndSettle();
+    await sweep('Settings, Backups and sync');
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Appearance'));
+    await tester.pumpAndSettle();
+    await sweep('Appearance');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('23 October'));
+    await tester.pumpAndSettle();
+    await sweep('Calendar');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    state.showMonth(10);
+    await tester.pumpAndSettle();
+    await sweep('October');
+    await tester.tap(find.text('Edit rituals'));
+    await tester.pumpAndSettle();
+    await sweep('Editing rituals');
+    state.showYear();
+    await tester.pumpAndSettle();
+    await sweep('Year');
+    state.startTour();
+    await tester.pumpAndSettle();
+    await sweep('Welcome tour');
+
+    expect(missing, isEmpty);
   });
 }

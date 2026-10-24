@@ -10,9 +10,10 @@ import 'store.dart';
 /// whole history can follow you to a new computer.
 ///
 /// The choice itself lives in a small file in the app's own folder, which
-/// is never moved.
+/// is never moved. So does where the journal goes, if you've picked a
+/// folder for it: each computer keeps its own, as paths differ.
 class DataFolder {
-  DataFolder._(this.home, this.chosen, this.documents);
+  DataFolder._(this.home, this.chosen, this.documents, this.journalChosen);
 
   /// The app's own folder: ~/.local/share/dev.nicholas.productivity_app
   final Directory home;
@@ -22,19 +23,34 @@ class DataFolder {
 
   final Directory documents;
 
-  static File _pointer(Directory home) => File(p.join(home.path, 'data-folder'));
+  /// The folder you picked for the journal; null for the default.
+  Directory? journalChosen;
 
-  static DataFolder load(Directory home, Directory documents) {
-    final pointer = _pointer(home);
+  static File _pointer(Directory home) => File(p.join(home.path, 'data-folder'));
+  static File _journalPointer(Directory home) => File(p.join(home.path, 'journal-folder'));
+
+  static Directory? _read(File pointer) {
     final path = pointer.existsSync() ? pointer.readAsStringSync().trim() : '';
-    return DataFolder._(home, path.isEmpty ? null : Directory(path), documents);
+    return path.isEmpty ? null : Directory(path);
   }
+
+  static DataFolder load(Directory home, Directory documents) =>
+      DataFolder._(home, _read(_pointer(home)), documents, _read(_journalPointer(home)));
 
   Directory get root => chosen ?? home;
   String get database => p.join(root.path, 'productivity.db');
   Directory get backups => Directory(p.join(root.path, 'backups'));
   Directory get journal =>
-      chosen == null ? Directory(p.join(documents.path, 'Eclipse Journal')) : Directory(p.join(root.path, 'Journal'));
+      journalChosen ??
+      (chosen == null ? Directory(p.join(documents.path, 'Eclipse Journal')) : Directory(p.join(root.path, 'Journal')));
+
+  /// Keeps the journal's files in [folder] from now on. Moving the files
+  /// already there is up to the caller, which can write them from the
+  /// database.
+  void useJournal(Directory folder) {
+    _journalPointer(home).writeAsStringSync(folder.path);
+    journalChosen = folder;
+  }
 
   /// Whether [folder] already holds Eclipse's data (from another computer,
   /// or an earlier move).
@@ -44,7 +60,7 @@ class DataFolder {
   /// own, everything is copied there first; the old copy stays where it
   /// was, untouched.
   void moveTo(Directory folder, Store store) {
-    final target = DataFolder._(home, folder, documents);
+    final target = DataFolder._(home, folder, documents, journalChosen);
     if (!hasData(folder)) {
       folder.createSync(recursive: true);
       _copyTree(backups, target.backups);
@@ -96,19 +112,19 @@ class DataFolder {
 
   /// Asks for a folder with the desktop's own picker; null if cancelled or
   /// there's no picker to ask with.
-  static Future<Directory?> pick({String? start}) async {
+  static Future<Directory?> pick({String? start, String title = 'Keep Eclipse\'s data in'}) async {
     final home = Platform.environment['HOME'] ?? '/';
     final commands = Platform.isMacOS
         ? [
-            ['osascript', '-e', 'POSIX path of (choose folder with prompt "Keep Eclipse\'s data in")'],
+            ['osascript', '-e', 'POSIX path of (choose folder with prompt "$title")'],
           ]
         : [
-            ['kdialog', '--title', 'Keep Eclipse\'s data in', '--getexistingdirectory', start ?? home],
+            ['kdialog', '--title', title, '--getexistingdirectory', start ?? home],
             [
               'zenity',
               '--file-selection',
               '--directory',
-              '--title=Keep Eclipse\'s data in',
+              '--title=$title',
               '--filename=${start ?? home}/',
             ],
           ];
