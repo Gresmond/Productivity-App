@@ -8,6 +8,7 @@ import '../data/updates.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/backups_dialog.dart';
+import '../widgets/fade_menu.dart';
 import '../widgets/fade_through.dart';
 import '../widgets/update_banner.dart';
 import 'month_view.dart';
@@ -451,50 +452,60 @@ class _BackupsButton extends StatelessWidget {
 
 /// Round swatch of the current theme; opens a menu of all themes, the
 /// rest-weekends switch and when a new day starts.
-class _ThemeButton extends StatefulWidget {
+class _ThemeButton extends StatelessWidget {
   const _ThemeButton();
 
   @override
-  State<_ThemeButton> createState() => _ThemeButtonState();
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Tooltip(
+      message: 'Appearance',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => showFadeMenu(context, builder: (_) => const _AppearanceMenu()),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: p.tile.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+              border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
+              boxShadow: [
+                BoxShadow(
+                  color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: _Swatch(palette: p, size: 36),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _ThemeButtonState extends State<_ThemeButton> {
-  /// Menu values of the switches; the others are theme names.
-  static const _restWeekends = '#restWeekends';
-  static const _followNightLight = '#followNightLight';
-
-  final _menu = GlobalKey<PopupMenuButtonState<String>>();
+/// The appearance menu's contents. Picking a theme closes it; the switches
+/// and the day-start pill flip in place, so you see them move.
+class _AppearanceMenu extends StatelessWidget {
+  const _AppearanceMenu();
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final state = AppScope.of(context);
-    // Disabled so its own InkWell draws no square hover; the swatch opens
-    // the menu itself.
-    return PopupMenuButton<String>(
-      key: _menu,
-      enabled: false,
-      tooltip: 'Appearance',
-      offset: const Offset(0, 54),
-      color: p.tile,
-      surfaceTintColor: Colors.transparent,
-      elevation: 4,
-      shadowColor: p.shadow.withValues(alpha: 0.15),
-      constraints: const BoxConstraints(minWidth: 280),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: p.tileBorder),
-      ),
-      onSelected: (value) => switch (value) {
-        _restWeekends => state.setRestWeekends(!state.restWeekends),
-        _followNightLight => state.setFollowNightLight(!state.followNightLight),
-        _ => state.setTheme(value),
-      },
-      itemBuilder: (_) => [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         for (final option in palettes)
-          PopupMenuItem(
-            value: option.name,
+          FadeMenuRow(
             height: 50,
+            onTap: () {
+              state.setTheme(option.name);
+              Navigator.pop(context);
+            },
             child: Row(
               children: [
                 _Swatch(palette: option, size: 28),
@@ -525,65 +536,44 @@ class _ThemeButtonState extends State<_ThemeButton> {
             ),
           ),
         if (state.nightLightAvailable) ...[
-          const PopupMenuDivider(),
-          _switchItem(
+          const FadeMenuDivider(),
+          _switchRow(
             p,
-            value: _followNightLight,
             title: 'Follow night light',
             subtitle: 'Its dark partner while night light is on.',
             on: state.followNightLight,
+            onTap: () => state.setFollowNightLight(!state.followNightLight),
           ),
         ],
-        const PopupMenuDivider(),
-        _switchItem(
+        const FadeMenuDivider(),
+        _switchRow(
           p,
-          value: _restWeekends,
           title: 'Weekends as rest days',
           subtitle: "Greyed out. A blank one won't break a streak.",
           on: state.restWeekends,
+          onTap: () => state.setRestWeekends(!state.restWeekends),
         ),
-        const PopupMenuDivider(),
+        const FadeMenuDivider(),
         const _DayStartEntry(),
       ],
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () => _menu.currentState?.showButtonMenu(),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: p.tile.withValues(alpha: 0.8),
-              shape: BoxShape.circle,
-              border: Border.all(color: p.tileBorder.withValues(alpha: 0.85)),
-              boxShadow: [
-                BoxShadow(
-                  color: p.shadow.withValues(alpha: p.brightness == Brightness.dark ? 0.3 : 0.03),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: _Swatch(palette: p, size: 36),
-          ),
-        ),
-      ),
     );
   }
 
-  PopupMenuItem<String> _switchItem(
+  Widget _switchRow(
     Palette p, {
-    required String value,
     required String title,
     required String subtitle,
     required bool on,
+    required VoidCallback onTap,
   }) {
-    return PopupMenuItem(
-      value: value,
+    return FadeMenuRow(
       height: 60,
+      onTap: onTap,
       child: Row(
         children: [
           Expanded(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -606,18 +596,12 @@ class _ThemeButtonState extends State<_ThemeButton> {
   }
 }
 
-/// Picks the hour a new day starts. Stays open while you choose, since
-/// picking just moves the highlight.
-class _DayStartEntry extends PopupMenuEntry<String> {
+/// Picks the hour a new day starts. The menu stays open while you choose,
+/// since picking just moves the highlight.
+class _DayStartEntry extends StatefulWidget {
   const _DayStartEntry();
 
   static const hours = [0, 4];
-
-  @override
-  double get height => 96;
-
-  @override
-  bool represents(String? value) => false;
 
   @override
   State<_DayStartEntry> createState() => _DayStartEntryState();
@@ -635,7 +619,7 @@ class _DayStartEntryState extends State<_DayStartEntry> {
     final p = context.palette;
     final state = AppScope.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
